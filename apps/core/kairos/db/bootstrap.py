@@ -1,0 +1,34 @@
+"""Creacion del esquema.
+
+Fase 1 usa create_all + un trigger de proteccion. En cuanto el esquema
+estabilice (final de Fase 2) se sustituye por Alembic; hasta entonces Alembic
+solo genera ruido de migraciones sobre un modelo que cambia cada dia.
+Decision registrada en docs/adr/0004-esquema-sin-alembic-en-fase-1.md
+"""
+from __future__ import annotations
+
+from sqlalchemy import text
+
+from kairos.db.models import Base
+from kairos.db.session import get_engine
+
+APPEND_ONLY_GUARD = """
+CREATE OR REPLACE FUNCTION kairos_audit_append_only() RETURNS trigger AS $$
+BEGIN
+    RAISE EXCEPTION 'audit_log es append-only: % no permitido', TG_OP;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS audit_log_no_update ON audit_log;
+CREATE TRIGGER audit_log_no_update
+    BEFORE UPDATE OR DELETE ON audit_log
+    FOR EACH ROW EXECUTE FUNCTION kairos_audit_append_only();
+"""
+
+
+async def create_schema() -> None:
+    engine = get_engine()
+    async with engine.begin() as conn:
+        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+        await conn.run_sync(Base.metadata.create_all)
+        await conn.execute(text(APPEND_ONLY_GUARD))
