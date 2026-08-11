@@ -1,26 +1,57 @@
-/* KAIROS OS — sistema visual
- *
- * Direccion: panel de instrumentos, no burbujas de chat. La pantalla existe
- * para que se vea que hace la maquina, no para simular una conversacion.
- * Sin fuentes remotas: KAIROS debe verse igual con el router desenchufado.
- */
+/* ==========================================================================
+   KAIROS OS — sistema visual
+   ==========================================================================
+
+   Direccion: panel de instrumentos. Lo que hace de KAIROS un JARVIS y no un
+   chat no es el brillo azul de las peliculas — es que la maquina te ensena
+   sus propias constantes vitales mientras trabaja. Aqui todos los numeros en
+   pantalla son reales: agentes vivos, modelo cargado, latencia medida,
+   recuerdos consultados. Cero telemetria decorativa.
+
+   El color codifica estado, no adorna:
+     laton  el sistema actuando en local (lo normal)
+     hielo  dato medido, lectura de instrumento
+     brasa  datos saliendo de la maquina (deberia no verse nunca)
+
+   Sin fuentes remotas ni CDN: KAIROS debe verse identico con el router
+   desenchufado. Toda la personalidad tipografica sale de pesos, anchos,
+   espaciado y escala sobre pilas de sistema.
+   ========================================================================== */
 
 :root {
-  --graphite: #0f1416;
-  --panel: #151d1f;
-  --line: #24302f;
-  --bone: #e9e4d8;
-  --muted: #78888c;
-  --brass: #c9a227;
-  --alert: #c4553b;
+  /* --- superficie --- */
+  --void: #080c0f;
+  --deck: #0e161b;
+  --panel: #131e24;
+  --rule: #1d2d35;
+  --rule-bright: #2b414c;
 
-  --font-ui: ui-sans-serif, "Inter", "Segoe UI", system-ui, sans-serif;
-  --font-mono: ui-monospace, "JetBrains Mono", "SFMono-Regular", Menlo, monospace;
+  /* --- tinta --- */
+  --bone: #e4eaea;
+  --dim: #6a8189;
+  --faint: #3f545c;
 
-  --step-0: 0.9375rem;
-  --step-1: 1.125rem;
-  --step-2: 1.5rem;
-  --micro: 0.6875rem;
+  /* --- señal --- */
+  --brass: #d9a441;
+  --brass-dim: #6b5322;
+  --ice: #74b8cc;
+  --ember: #d2593f;
+
+  /* --- tipografía --- */
+  --ui: ui-sans-serif, "Inter", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  --data: ui-monospace, "JetBrains Mono", "Cascadia Mono", "SFMono-Regular", Menlo, monospace;
+
+  --t-micro: 0.6875rem;
+  --t-small: 0.8125rem;
+  --t-body: 0.9375rem;
+  --t-lead: 1.0625rem;
+  --t-display: 1.375rem;
+
+  --track: 0.26em;   /* espaciado del wordmark */
+  --track-label: 0.14em;
+
+  --gap: 1rem;
+  --edge: 1.5rem;
 }
 
 * { box-sizing: border-box; }
@@ -29,109 +60,285 @@ html, body {
   margin: 0;
   padding: 0;
   height: 100%;
-  background: var(--graphite);
+  background: var(--void);
   color: var(--bone);
-  font-family: var(--font-ui);
-  font-size: var(--step-0);
+  font-family: var(--ui);
+  font-size: var(--t-body);
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
-/* --- estructura ---------------------------------------------------------- */
+/* Rejilla de fondo: sutil, fija, da sensacion de superficie tecnica sin
+   competir con el contenido. Se apaga con reduced-motion? No: es estatica,
+   no molesta a nadie. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    linear-gradient(var(--rule) 1px, transparent 1px),
+    linear-gradient(90deg, var(--rule) 1px, transparent 1px);
+  background-size: 64px 64px;
+  opacity: 0.14;
+  mask-image: radial-gradient(ellipse 120% 80% at 50% 0%, #000 30%, transparent 100%);
+}
 
-.shell {
+/* ==========================================================================
+   TIRA DE TELEMETRIA — elemento firma
+   ========================================================================== */
+
+.strip {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid var(--rule-bright);
+  background: linear-gradient(180deg, var(--deck), var(--void));
+}
+
+.wordmark {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0 1.15rem;
+  border-right: 1px solid var(--rule);
+  font-weight: 600;
+  font-size: var(--t-small);
+  letter-spacing: var(--track);
+  color: var(--bone);
+}
+
+/* Diafragma: seis segmentos que giran despacio mientras KAIROS genera.
+   Es el unico movimiento continuo de la interfaz y solo aparece cuando el
+   sistema esta realmente trabajando. */
+.iris {
+  width: 15px;
+  height: 15px;
+  flex: none;
+  border-radius: 50%;
+  border: 1.5px solid var(--brass);
+  position: relative;
+}
+
+.iris::after {
+  content: "";
+  position: absolute;
+  inset: 2.5px;
+  border-radius: 50%;
+  background: var(--brass);
+  opacity: 0.28;
+  transition: opacity 0.4s ease;
+}
+
+.iris[data-live]::after { opacity: 0.9; }
+
+.iris[data-live] {
+  animation: iris-spin 2.6s linear infinite;
+  border-style: dashed;
+}
+
+@keyframes iris-spin { to { transform: rotate(360deg); } }
+
+.gauges {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.gauges::-webkit-scrollbar { display: none; }
+
+.gauge {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.1rem;
+  padding: 0.55rem 1.1rem;
+  border-right: 1px solid var(--rule);
+  font-family: var(--data);
+  white-space: nowrap;
+}
+
+.gauge dt {
+  font-size: 0.5625rem;
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--faint);
+  margin: 0;
+}
+
+.gauge dd {
+  margin: 0;
+  font-size: var(--t-micro);
+  color: var(--ice);
+  font-variant-numeric: tabular-nums;
+}
+
+.gauge dd[data-tone="local"] { color: var(--brass); }
+.gauge dd[data-tone="alert"] { color: var(--ember); }
+.gauge dd[data-tone="idle"] { color: var(--dim); }
+
+.strip .identity {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0 1.1rem;
+  border-left: 1px solid var(--rule);
+  font-family: var(--data);
+  font-size: var(--t-micro);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+/* ==========================================================================
+   ESTRUCTURA
+   ========================================================================== */
+
+.deck {
+  position: relative;
+  z-index: 1;
   display: grid;
   grid-template-rows: auto 1fr;
   height: 100dvh;
 }
 
-.statusbar {
-  display: flex;
-  align-items: baseline;
-  gap: 1.25rem;
-  padding: 0.75rem 1.25rem;
-  border-bottom: 1px solid var(--line);
-  font-family: var(--font-mono);
-  font-size: var(--micro);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.statusbar .mark {
-  color: var(--bone);
-  font-weight: 600;
-  letter-spacing: 0.24em;
-}
-
-.statusbar .spacer { margin-left: auto; }
-
-.pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-
-.pill::before {
-  content: "";
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--brass);
-}
-
-.pill[data-state="offline"]::before { background: var(--muted); }
-.pill[data-state="warn"]::before { background: var(--alert); }
-
-.workspace {
+.bay {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 22rem;
+  grid-template-columns: minmax(0, 1fr) 21rem;
   min-height: 0;
 }
 
-@media (max-width: 900px) {
-  .workspace { grid-template-columns: minmax(0, 1fr); }
-  .rail { display: none; }
+.channel {
+  display: grid;
+  grid-template-rows: 1fr auto;
+  min-height: 0;
+  min-width: 0;
 }
 
-/* --- transcripcion ------------------------------------------------------- */
+/* ==========================================================================
+   CONVERSACION
+   ========================================================================== */
 
-.transcript {
+.log {
   overflow-y: auto;
-  padding: 2rem 1.75rem 1rem;
+  padding: 2.25rem var(--edge) 1rem;
   display: flex;
   flex-direction: column;
-  gap: 1.75rem;
+  gap: 2rem;
+  scrollbar-width: thin;
+  scrollbar-color: var(--rule-bright) transparent;
 }
 
-.turn { max-width: 46rem; }
+.entry { max-width: 44rem; }
 
-.turn .who {
-  font-family: var(--font-mono);
-  font-size: var(--micro);
-  letter-spacing: 0.16em;
+.entry .from {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--data);
+  font-size: 0.5625rem;
+  letter-spacing: var(--track-label);
   text-transform: uppercase;
-  color: var(--muted);
-  margin-bottom: 0.4rem;
+  color: var(--faint);
+  margin-bottom: 0.5rem;
 }
 
-.turn[data-role="assistant"] .who { color: var(--brass); }
-
-.turn .body { white-space: pre-wrap; }
-
-.empty {
-  color: var(--muted);
-  max-width: 34rem;
-  font-size: var(--step-1);
+.entry .from::before {
+  content: "";
+  width: 14px;
+  height: 1px;
+  background: var(--faint);
 }
 
-.empty strong { color: var(--bone); font-weight: 500; }
+.entry[data-from="kairos"] .from { color: var(--brass); }
+.entry[data-from="kairos"] .from::before { background: var(--brass); }
 
-/* --- entrada ------------------------------------------------------------- */
+.entry .said {
+  white-space: pre-wrap;
+  font-size: var(--t-lead);
+  line-height: 1.62;
+}
 
-.composer {
-  border-top: 1px solid var(--line);
-  padding: 1rem 1.75rem 1.5rem;
+.entry[data-from="kairos"] .said { color: var(--bone); }
+.entry[data-from="me"] .said { color: #b9c6c8; }
+
+/* Cursor de generacion */
+.cursor {
+  display: inline-block;
+  width: 0.5em;
+  height: 1.05em;
+  margin-left: 0.12em;
+  background: var(--brass);
+  vertical-align: text-bottom;
+  animation: cursor-blink 1.1s steps(2, start) infinite;
+}
+
+@keyframes cursor-blink { to { visibility: hidden; } }
+
+.thinking {
+  color: var(--dim);
+  font-family: var(--data);
+  font-size: var(--t-small);
+}
+
+/* --- pantalla vacia: invitacion, no decoracion --- */
+
+.standby { max-width: 32rem; padding-top: 1rem; }
+
+.standby h1 {
+  font-size: var(--t-display);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  margin: 0 0 0.75rem;
+  color: var(--bone);
+}
+
+.standby p {
+  color: var(--dim);
+  margin: 0 0 1.5rem;
+  font-size: var(--t-body);
+}
+
+.standby ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.standby li {
+  font-family: var(--data);
+  font-size: var(--t-small);
+  color: var(--dim);
+  padding-left: 1.1rem;
+  position: relative;
+  cursor: pointer;
+}
+
+.standby li::before {
+  content: "›";
+  position: absolute;
+  left: 0;
+  color: var(--brass);
+}
+
+.standby li:hover { color: var(--bone); }
+
+/* ==========================================================================
+   ENTRADA
+   ========================================================================== */
+
+.console {
+  border-top: 1px solid var(--rule-bright);
+  background: var(--deck);
+  padding: 0.9rem var(--edge) 1.15rem;
   display: flex;
   gap: 0.75rem;
   align-items: flex-end;
@@ -139,158 +346,282 @@ html, body {
 
 textarea, input {
   width: 100%;
-  background: var(--panel);
-  border: 1px solid var(--line);
+  background: var(--void);
+  border: 1px solid var(--rule-bright);
   color: var(--bone);
-  font: inherit;
-  padding: 0.7rem 0.85rem;
+  font-family: var(--ui);
+  font-size: var(--t-body);
+  padding: 0.7rem 0.9rem;
   resize: none;
+  transition: border-color 0.18s ease;
 }
 
-textarea:focus-visible, input:focus-visible, button:focus-visible {
+textarea::placeholder, input::placeholder { color: var(--faint); }
+textarea:focus, input:focus { border-color: var(--brass-dim); }
+
+:focus-visible {
   outline: 2px solid var(--brass);
   outline-offset: 2px;
 }
 
 button {
   background: transparent;
-  border: 1px solid var(--brass);
-  color: var(--brass);
-  font-family: var(--font-mono);
-  font-size: var(--micro);
-  letter-spacing: 0.12em;
+  border: 1px solid var(--rule-bright);
+  color: var(--dim);
+  font-family: var(--data);
+  font-size: var(--t-micro);
+  letter-spacing: var(--track-label);
   text-transform: uppercase;
-  padding: 0.75rem 1.1rem;
+  padding: 0.72rem 1.05rem;
   cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.16s ease, border-color 0.16s ease, background 0.16s ease;
 }
 
-button:hover:not(:disabled) { background: var(--brass); color: var(--graphite); }
-button:disabled { opacity: 0.4; cursor: not-allowed; }
+button:hover:not(:disabled) {
+  color: var(--brass);
+  border-color: var(--brass-dim);
+}
 
-/* --- rail de traza (elemento firma) -------------------------------------- */
+button[data-primary] { color: var(--brass); border-color: var(--brass-dim); }
+button[data-primary]:hover:not(:disabled) { background: var(--brass); color: var(--void); }
+button:disabled { opacity: 0.35; cursor: not-allowed; }
 
-.rail {
-  border-left: 1px solid var(--line);
+/* --- microfono --- */
+
+.mic { display: flex; flex-direction: column; gap: 0.4rem; align-items: stretch; }
+
+.mic button[data-recording] {
+  color: var(--ember);
+  border-color: var(--ember);
+  animation: mic-breathe 1.5s ease-in-out infinite;
+}
+
+.mic button[data-recording]:hover:not(:disabled) {
+  background: var(--ember);
+  color: var(--void);
+}
+
+@keyframes mic-breathe { 50% { opacity: 0.5; } }
+
+.mic-error {
+  font-family: var(--data);
+  font-size: 0.625rem;
+  color: var(--ember);
+  max-width: 15rem;
+  line-height: 1.45;
+}
+
+/* ==========================================================================
+   COLUMNA DE INSTRUMENTOS
+   ========================================================================== */
+
+.instruments {
+  border-left: 1px solid var(--rule-bright);
   background: var(--panel);
   overflow-y: auto;
-  padding: 1.25rem 1.1rem;
-  font-family: var(--font-mono);
-  font-size: var(--micro);
-  color: var(--muted);
+  padding: 1.15rem 1.1rem 2rem;
+  font-family: var(--data);
+  scrollbar-width: thin;
+  scrollbar-color: var(--rule-bright) transparent;
 }
 
-.rail h2 {
-  font-size: var(--micro);
-  letter-spacing: 0.16em;
+.instruments h2 {
+  font-size: 0.5625rem;
+  letter-spacing: var(--track-label);
   text-transform: uppercase;
-  color: var(--bone);
   font-weight: 500;
-  margin: 0 0 1rem;
+  color: var(--faint);
+  margin: 0 0 0.9rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--rule);
 }
 
-.rail ol { list-style: none; margin: 0; padding: 0; }
+.instruments h2 + * { margin-top: 0; }
+.instruments section + section { margin-top: 1.6rem; }
 
-.rail li {
-  border-left: 1px solid var(--line);
-  padding: 0 0 1.1rem 0.9rem;
+.instruments .quiet {
+  color: var(--faint);
+  font-size: var(--t-micro);
+  line-height: 1.6;
+}
+
+/* --- pasos de la traza --- */
+
+.steps { list-style: none; margin: 0; padding: 0; }
+
+.step {
   position: relative;
+  padding: 0 0 1rem 0.95rem;
+  border-left: 1px solid var(--rule-bright);
 }
 
-.rail li::before {
+.step:last-child { border-left-color: transparent; padding-bottom: 0; }
+
+.step::before {
   content: "";
   position: absolute;
   left: -3px;
-  top: 0.45em;
+  top: 0.42em;
   width: 5px;
   height: 5px;
   background: var(--brass);
 }
 
-.rail .label { color: var(--bone); letter-spacing: 0.06em; }
-.rail .kv { display: flex; justify-content: space-between; gap: 1rem; }
-.rail .memory { color: var(--bone); font-family: var(--font-ui); font-size: 0.8rem; }
-
-.error {
-  border: 1px solid var(--alert);
-  color: var(--alert);
-  padding: 0.6rem 0.8rem;
-  font-family: var(--font-mono);
-  font-size: var(--micro);
+.step .op {
+  font-size: var(--t-micro);
+  color: var(--bone);
+  letter-spacing: 0.04em;
+  margin-bottom: 0.3rem;
 }
 
-/* --- acceso -------------------------------------------------------------- */
+.step .op b { font-weight: 500; color: var(--brass); }
 
-.gate {
+.row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.625rem;
+  color: var(--faint);
+  line-height: 1.75;
+}
+
+.row span:last-child {
+  color: var(--ice);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- recuerdos: la barra ES el dato --- */
+
+.recall { list-style: none; margin: 0; padding: 0; }
+
+.recall li { padding: 0 0 0.9rem; }
+
+.meter {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin-bottom: 0.3rem;
+}
+
+.meter .bar {
+  flex: 1;
+  height: 2px;
+  background: var(--rule-bright);
+  position: relative;
+}
+
+.meter .bar i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--ice);
+  display: block;
+}
+
+.meter .val {
+  font-size: 0.625rem;
+  color: var(--ice);
+  font-variant-numeric: tabular-nums;
+}
+
+.recall .fact {
+  font-family: var(--ui);
+  font-size: var(--t-small);
+  color: #c3cfd1;
+  line-height: 1.45;
+}
+
+.recall .tag {
+  font-size: 0.5625rem;
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+/* ==========================================================================
+   ACCESO
+   ========================================================================== */
+
+.airlock {
   display: grid;
   place-items: center;
   height: 100dvh;
   padding: 1.5rem;
+  position: relative;
+  z-index: 1;
 }
 
-.gate form {
-  width: min(24rem, 100%);
+.airlock form {
+  width: min(23rem, 100%);
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.7rem;
 }
 
-.gate h1 {
-  font-size: var(--step-2);
-  letter-spacing: 0.3em;
-  font-weight: 500;
+.airlock .mark {
+  font-size: 1.75rem;
+  font-weight: 300;
+  letter-spacing: var(--track);
   margin: 0;
+  color: var(--bone);
 }
 
-.gate p { color: var(--muted); margin: 0 0 0.5rem; font-size: 0.85rem; }
+.airlock .sub {
+  font-family: var(--data);
+  font-size: var(--t-micro);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--faint);
+  margin: 0 0 1.1rem;
+}
+
+/* Secuencia de arranque: comprobaciones reales, no teatro. */
+.boot {
+  font-family: var(--data);
+  font-size: var(--t-micro);
+  color: var(--faint);
+  min-height: 1.5rem;
+  margin: 0 0 0.5rem;
+}
+
+.boot b { color: var(--brass); font-weight: 400; }
+
+.fault {
+  border-left: 2px solid var(--ember);
+  padding: 0.5rem 0.75rem;
+  font-family: var(--data);
+  font-size: var(--t-micro);
+  color: var(--ember);
+  line-height: 1.5;
+  background: rgba(210, 89, 63, 0.06);
+}
+
+/* ==========================================================================
+   ADAPTACION A PANTALLA ESTRECHA
+   Preparado para el acceso movil: los instrumentos se pliegan bajo la
+   conversacion en vez de desaparecer — la auditabilidad no es opcional.
+   ========================================================================== */
+
+@media (max-width: 900px) {
+  :root { --edge: 1rem; }
+
+  .bay { grid-template-columns: minmax(0, 1fr); grid-template-rows: 1fr auto; }
+
+  .instruments {
+    border-left: none;
+    border-top: 1px solid var(--rule-bright);
+    max-height: 40vh;
+  }
+
+  .strip .identity .who { display: none; }
+  .entry .said { font-size: var(--t-body); }
+}
 
 @media (prefers-reduced-motion: reduce) {
-  * { animation: none !important; transition: none !important; }
-}
-/* --- cursor de generación (Fase 2A) -------------------------------------- */
-
-.caret {
-  display: inline-block;
-  width: 0.55em;
-  height: 1em;
-  margin-left: 0.1em;
-  background: var(--brass);
-  vertical-align: text-bottom;
-  animation: caret-blink 1s steps(2, start) infinite;
-}
-
-@keyframes caret-blink {
-  to { visibility: hidden; }
-}
-
-/* --- captura de voz (Fase 2C) -------------------------------------------- */
-
-.mic {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  align-items: flex-end;
-}
-
-.mic button[data-recording] {
-  border-color: var(--alert);
-  color: var(--alert);
-  animation: mic-pulse 1.4s ease-in-out infinite;
-}
-
-.mic button[data-recording]:hover:not(:disabled) {
-  background: var(--alert);
-  color: var(--graphite);
-}
-
-.mic-error {
-  font-family: var(--font-mono);
-  font-size: var(--micro);
-  color: var(--alert);
-  max-width: 16rem;
-  text-align: right;
-  line-height: 1.4;
-}
-
-@keyframes mic-pulse {
-  50% { opacity: 0.55; }
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+  .cursor { visibility: visible; }
 }

@@ -1,0 +1,93 @@
+"use client";
+
+import type { Health } from "@/lib/api";
+
+/**
+ * Tira de telemetría — el elemento firma de la interfaz.
+ *
+ * Todo lo que muestra es real: agentes vivos según el health check, modelo
+ * cargado, latencia del último turno, recuerdos consultados, y si hay salida
+ * a Internet. Nada de indicadores decorativos: si un número aparece aquí es
+ * porque KAIROS lo mide.
+ *
+ * El color codifica estado. Latón = el sistema actuando en local. Hielo =
+ * lectura de instrumento. Brasa = datos saliendo de la máquina, que en una
+ * instalación bien configurada no debería verse nunca.
+ */
+export function StatusStrip({
+  health,
+  username,
+  busy,
+  lastLatency,
+  lastModel,
+  recalled,
+  onSignOut,
+}: {
+  health: Health | null;
+  username: string;
+  busy: boolean;
+  lastLatency: number | null;
+  lastModel: string | null;
+  recalled: number | null;
+  onSignOut: () => void;
+}) {
+  const agentsUp = health?.agents.filter((a) => a.status === "ok").length ?? 0;
+  const agentsTotal = health?.agents.length ?? 0;
+  const degraded = agentsTotal > 0 && agentsUp < agentsTotal;
+
+  return (
+    <header className="strip">
+      <div className="wordmark">
+        <span className="iris" data-live={busy || undefined} aria-hidden="true" />
+        KAIROS
+      </div>
+
+      <dl className="gauges">
+        <div className="gauge">
+          <dt>Nodo</dt>
+          <dd data-tone="local">{health?.instance ?? "—"}</dd>
+        </div>
+
+        <div className="gauge">
+          <dt>Agentes</dt>
+          <dd data-tone={degraded ? "alert" : "local"}>
+            {agentsTotal ? `${agentsUp}/${agentsTotal} activos` : "—"}
+          </dd>
+        </div>
+
+        <div className="gauge">
+          <dt>Modelo</dt>
+          <dd>{lastModel ?? "en reposo"}</dd>
+        </div>
+
+        <div className="gauge">
+          <dt>Última respuesta</dt>
+          <dd data-tone={lastLatency === null ? "idle" : undefined}>
+            {lastLatency === null ? "—" : `${(lastLatency / 1000).toFixed(2)} s`}
+          </dd>
+        </div>
+
+        <div className="gauge">
+          <dt>Memoria consultada</dt>
+          <dd data-tone={recalled === null ? "idle" : undefined}>
+            {recalled === null ? "—" : `${recalled} recuerdos`}
+          </dd>
+        </div>
+
+        <div className="gauge">
+          <dt>Salida de datos</dt>
+          <dd data-tone={health?.egress_allowed ? "alert" : "local"}>
+            {health?.egress_allowed ? "permitida" : "bloqueada"}
+          </dd>
+        </div>
+      </dl>
+
+      <div className="identity">
+        <span className="who">{username}</span>
+        <button type="button" onClick={onSignOut} style={{ padding: "0.3rem 0.7rem" }}>
+          Salir
+        </button>
+      </div>
+    </header>
+  );
+}

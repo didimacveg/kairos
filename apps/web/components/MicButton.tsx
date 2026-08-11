@@ -5,13 +5,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 /**
  * Captura de voz con MediaRecorder.
  *
- * El micrófono vive en el navegador (ADR 0008). El audio se graba, se manda
- * al núcleo y vuelve como texto al cuadro de escritura — NO se envía solo.
- * Ver la transcripción antes de mandarla es lo que evita que un error de
- * reconocimiento acabe en la memoria permanente.
+ * El texto vuelve al cuadro de escritura; no se envía solo. Whisper se
+ * equivoca con nombres propios y con ruido, y con la memoria curada un
+ * mensaje enviado puede convertirse en un hecho permanente.
  *
  * La pista se detiene explícitamente al terminar: si no, el navegador deja el
- * indicador de micrófono encendido y el usuario no puede saber si sigue
+ * indicador de micrófono encendido y no hay forma de saber si sigue
  * escuchando. En un sistema cuya premisa es la privacidad, eso importa.
  */
 export function MicButton({
@@ -23,7 +22,7 @@ export function MicButton({
 }) {
   const [recording, setRecording] = useState(false);
   const [working, setWorking] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [fault, setFault] = useState<string | null>(null);
   const [seconds, setSeconds] = useState(0);
 
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -31,7 +30,7 @@ export function MicButton({
   const streamRef = useRef<MediaStream | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const releaseMic = useCallback(() => {
+  const release = useCallback(() => {
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
     if (timerRef.current) {
@@ -40,13 +39,12 @@ export function MicButton({
     }
   }, []);
 
-  // Si el componente se desmonta grabando, el micro se libera igualmente.
-  useEffect(() => releaseMic, [releaseMic]);
+  useEffect(() => release, [release]);
 
-  const send = useCallback(
+  const upload = useCallback(
     async (blob: Blob) => {
       setWorking(true);
-      setError(null);
+      setFault(null);
       try {
         const form = new FormData();
         form.append("audio", blob, "audio.webm");
@@ -60,13 +58,10 @@ export function MicButton({
           throw new Error(body?.detail ?? `El núcleo respondió ${response.status}`);
         }
         const data = (await response.json()) as { text: string };
-        if (data.text.trim()) {
-          onTranscript(data.text.trim());
-        } else {
-          setError("No se entendió nada. Prueba a hablar más cerca del micrófono.");
-        }
+        if (data.text.trim()) onTranscript(data.text.trim());
+        else setFault("No se entendió nada. Acércate al micrófono.");
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Fallo al transcribir");
+        setFault(err instanceof Error ? err.message : "Fallo al transcribir");
       } finally {
         setWorking(false);
       }
@@ -75,7 +70,7 @@ export function MicButton({
   );
 
   const start = useCallback(async () => {
-    setError(null);
+    setFault(null);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 },
@@ -88,10 +83,10 @@ export function MicButton({
         if (event.data.size > 0) chunksRef.current.push(event.data);
       };
       recorder.onstop = () => {
-        releaseMic();
+        release();
         const blob = new Blob(chunksRef.current, { type: "audio/webm" });
-        if (blob.size > 1000) void send(blob);
-        else setError("Grabación demasiado corta.");
+        if (blob.size > 1000) void upload(blob);
+        else setFault("Grabación demasiado corta.");
       };
 
       recorder.start();
@@ -100,17 +95,15 @@ export function MicButton({
       setSeconds(0);
       timerRef.current = setInterval(() => setSeconds((s) => s + 1), 1000);
     } catch {
-      setError("Sin acceso al micrófono. Permítelo en el candado de la barra de direcciones.");
+      setFault("Sin acceso al micrófono. Permítelo en el candado de la barra de direcciones.");
     }
-  }, [releaseMic, send]);
+  }, [release, upload]);
 
   const stop = useCallback(() => {
     recorderRef.current?.stop();
     recorderRef.current = null;
     setRecording(false);
   }, []);
-
-  const label = working ? "Transcribiendo…" : recording ? `Detener ${seconds}s` : "Hablar";
 
   return (
     <div className="mic">
@@ -121,9 +114,9 @@ export function MicButton({
         data-recording={recording || undefined}
         aria-label={recording ? "Detener grabación" : "Grabar mensaje de voz"}
       >
-        {label}
+        {working ? "Transcribiendo" : recording ? `Detener · ${seconds}s` : "Hablar"}
       </button>
-      {error && <span className="mic-error">{error}</span>}
+      {fault && <span className="mic-error">{fault}</span>}
     </div>
   );
 }

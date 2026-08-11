@@ -1,170 +1,167 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  api,
-  streamChat,
-  type ChatStreamEnd,
-  type Health,
-  type MemoryHit,
-  type TraceEntry,
-} from "@/lib/api";
+import { api, streamChat, type ChatStreamEnd, type Health, type MemoryHit, type TraceEntry } from "@/lib/api";
+import { Instruments, type TurnSummary } from "./Instruments";
 import { MicButton } from "./MicButton";
-import { TraceRail } from "./TraceRail";
+import { StatusStrip } from "./StatusStrip";
 
-type Turn = { role: "user" | "assistant"; content: string };
+type Entry = { from: "me" | "kairos"; said: string };
 
-/** Resumen del último turno, tal y como lo consume el rail. */
-export type LastTurn = {
-  model: string;
-  latency_ms: number;
-  local: boolean;
-  memories: MemoryHit[];
-  trace: TraceEntry[];
-};
+/** Arranques sugeridos. Son ejemplos reales de lo que KAIROS sabe hacer hoy,
+ *  no promesas de funciones que aún no existen. */
+const OPENERS = [
+  "Recuerda que trabajo mejor por las noches",
+  "¿Qué sabes de mí?",
+  "Explícame cómo funciona un motor de combustión",
+];
 
 export function Console({ username, onSignOut }: { username: string; onSignOut: () => void }) {
-  const [turns, setTurns] = useState<Turn[]>([]);
+  const [entries, setEntries] = useState<Entry[]>([]);
   const [draft, setDraft] = useState("");
   const [streaming, setStreaming] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [last, setLast] = useState<LastTurn | null>(null);
+  const [fault, setFault] = useState<string | null>(null);
+  const [summary, setSummary] = useState<TurnSummary | null>(null);
   const [liveTrace, setLiveTrace] = useState<TraceEntry[]>([]);
   const [liveMemories, setLiveMemories] = useState<MemoryHit[]>([]);
   const [health, setHealth] = useState<Health | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
 
-  const bottom = useRef<HTMLDivElement>(null);
+  const foot = useRef<HTMLDivElement>(null);
   const abortRef = useRef<(() => void) | null>(null);
+  const boxRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    api.health().then(setHealth).catch(() => setHealth(null));
+    const poll = () => api.health().then(setHealth).catch(() => setHealth(null));
+    poll();
+    const id = setInterval(poll, 20_000);
+    return () => clearInterval(id);
   }, []);
 
   useEffect(() => {
-    bottom.current?.scrollIntoView({ behavior: "smooth" });
-  }, [turns, streaming]);
+    foot.current?.scrollIntoView({ behavior: "smooth" });
+  }, [entries, streaming]);
 
-  // Si el componente se desmonta a media generación, cortamos el flujo para
-  // no dejar la petición viva contra el núcleo.
   useEffect(() => () => abortRef.current?.(), []);
 
-  const send = useCallback(() => {
-    const message = draft.trim();
-    if (!message || streaming) return;
+  const send = useCallback(
+    (text?: string) => {
+      const message = (text ?? draft).trim();
+      if (!message || streaming) return;
 
-    setDraft("");
-    setError(null);
-    setLiveTrace([]);
-    setLiveMemories([]);
-    setLast(null);
-    setStreaming(true);
+      setDraft("");
+      setFault(null);
+      setLiveTrace([]);
+      setLiveMemories([]);
+      setSummary(null);
+      setStreaming(true);
+      setEntries((prev) => [...prev, { from: "me", said: message }, { from: "kairos", said: "" }]);
 
-    // Turno del usuario + hueco vacío del asistente que iremos rellenando.
-    setTurns((prev) => [...prev, { role: "user", content: message }, { role: "assistant", content: "" }]);
+      abortRef.current = streamChat(message, conversationId, {
+        onToken: (chunk) => {
+          setEntries((prev) => {
+            const next = [...prev];
+            const target = next[next.length - 1];
+            if (target?.from === "kairos") {
+              next[next.length - 1] = { ...target, said: target.said + chunk };
+            }
+            return next;
+          });
+        },
+        onTrace: (trace, data) => {
+          if (trace) setLiveTrace((prev) => [...prev, trace]);
+          if (Array.isArray(data.memories)) setLiveMemories(data.memories as MemoryHit[]);
+          if (typeof data.conversation_id === "string") setConversationId(data.conversation_id);
+        },
+        onEnd: (done: ChatStreamEnd) => {
+          setStreaming(false);
+          setConversationId(done.conversation_id);
+          setSummary({
+            model: done.model ?? "desconocido",
+            latency_ms: done.latency_ms ?? 0,
+            local: done.local,
+            memories: done.memories,
+            trace: done.trace,
+          });
+        },
+        onError: (message) => {
+          setStreaming(false);
+          setFault(message);
+          setEntries((prev) => {
+            const next = [...prev];
+            const target = next[next.length - 1];
+            if (target?.from === "kairos" && target.said === "") next.pop();
+            return next;
+          });
+        },
+      });
+    },
+    [draft, streaming, conversationId],
+  );
 
-    abortRef.current = streamChat(message, conversationId, {
-      onToken: (text) => {
-        setTurns((prev) => {
-          const next = [...prev];
-          const target = next[next.length - 1];
-          if (target?.role === "assistant") {
-            next[next.length - 1] = { ...target, content: target.content + text };
-          }
-          return next;
-        });
-      },
-      onTrace: (trace, data) => {
-        if (trace) setLiveTrace((prev) => [...prev, trace]);
-        if (Array.isArray(data.memories)) setLiveMemories(data.memories as MemoryHit[]);
-        if (typeof data.conversation_id === "string") setConversationId(data.conversation_id);
-      },
-      onEnd: (summary: ChatStreamEnd) => {
-        setStreaming(false);
-        setConversationId(summary.conversation_id);
-        setLast({
-          model: summary.model ?? "desconocido",
-          latency_ms: summary.latency_ms ?? 0,
-          local: summary.local,
-          memories: summary.memories,
-          trace: summary.trace,
-        });
-      },
-      onError: (message) => {
-        setStreaming(false);
-        setError(message);
-        // Retiramos el turno vacío para no dejar una burbuja en blanco.
-        setTurns((prev) => {
-          const next = [...prev];
-          const target = next[next.length - 1];
-          if (target?.role === "assistant" && target.content === "") next.pop();
-          return next;
-        });
-      },
-    });
-  }, [draft, streaming, conversationId]);
-
-  const stop = useCallback(() => {
+  const halt = useCallback(() => {
     abortRef.current?.();
     setStreaming(false);
   }, []);
 
-  const egressState = health?.egress_allowed ? "warn" : "offline";
-
   return (
-    <div className="shell">
-      <header className="statusbar">
-        <span className="mark">KAIROS</span>
-        <span>{health?.instance ?? "…"}</span>
-        <span className="pill" data-state={health?.status === "ok" ? undefined : "warn"}>
-          {health?.status ?? "comprobando"}
-        </span>
-        <span className="pill" data-state={egressState}>
-          {health?.egress_allowed ? "salida a internet permitida" : "sin salida a internet"}
-        </span>
-        <span className="spacer" />
-        <span>{username}</span>
-        <button type="button" onClick={onSignOut} style={{ padding: "0.25rem 0.6rem" }}>
-          Cerrar sesion
-        </button>
-      </header>
+    <div className="deck">
+      <StatusStrip
+        health={health}
+        username={username}
+        busy={streaming}
+        lastLatency={summary?.latency_ms ?? null}
+        lastModel={summary?.model ?? null}
+        recalled={summary ? summary.memories.length : null}
+        onSignOut={onSignOut}
+      />
 
-      <div className="workspace">
-        <div style={{ display: "grid", gridTemplateRows: "1fr auto", minHeight: 0 }}>
-          <div className="transcript">
-            {turns.length === 0 && (
-              <p className="empty">
-                <strong>Todo ocurre en esta maquina.</strong> Escribe algo. KAIROS buscara en su
-                memoria antes de responder y te mostrara a la derecha exactamente que consulto.
-              </p>
+      <div className="bay">
+        <div className="channel">
+          <div className="log">
+            {entries.length === 0 && (
+              <div className="standby">
+                <h1>Todo ocurre en esta máquina.</h1>
+                <p>
+                  KAIROS busca en su memoria antes de responder y te enseña a la derecha
+                  exactamente qué consultó. Empieza por donde quieras:
+                </p>
+                <ul>
+                  {OPENERS.map((opener) => (
+                    <li key={opener} onClick={() => send(opener)}>
+                      {opener}
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
 
-            {turns.map((turn, index) => {
-              const isLast = index === turns.length - 1;
-              const pending = streaming && isLast && turn.role === "assistant";
+            {entries.map((entry, index) => {
+              const pending = streaming && index === entries.length - 1 && entry.from === "kairos";
               return (
-                <article className="turn" data-role={turn.role} key={index}>
-                  <div className="who">{turn.role === "user" ? username : "kairos"}</div>
-                  <div className="body">
-                    {turn.content}
-                    {pending && <span className="caret" aria-hidden="true" />}
-                    {pending && turn.content === "" && (
-                      <span style={{ color: "var(--muted)" }}>Recuperando memoria…</span>
+                <article className="entry" data-from={entry.from} key={index}>
+                  <div className="from">{entry.from === "me" ? username : "kairos"}</div>
+                  <div className="said">
+                    {entry.said}
+                    {pending && entry.said === "" && (
+                      <span className="thinking">Consultando memoria…</span>
                     )}
+                    {pending && <span className="cursor" aria-hidden="true" />}
                   </div>
                 </article>
               );
             })}
 
-            {error && <div className="error">{error}</div>}
-            <div ref={bottom} />
+            {fault && <div className="fault">{fault}</div>}
+            <div ref={foot} />
           </div>
 
-          <div className="composer">
+          <div className="console">
             <textarea
+              ref={boxRef}
               rows={2}
               value={draft}
-              placeholder="Escribe un mensaje"
+              placeholder="Habla o escribe"
               aria-label="Mensaje"
               onChange={(event) => setDraft(event.target.value)}
               onKeyDown={(event) => {
@@ -176,24 +173,25 @@ export function Console({ username, onSignOut }: { username: string; onSignOut: 
             />
             <MicButton
               disabled={streaming}
-              onTranscript={(text) =>
-                setDraft((prev) => (prev ? `${prev} ${text}` : text))
-              }
+              onTranscript={(text) => {
+                setDraft((prev) => (prev ? `${prev} ${text}` : text));
+                boxRef.current?.focus();
+              }}
             />
             {streaming ? (
-              <button type="button" onClick={stop}>
+              <button type="button" onClick={halt}>
                 Detener
               </button>
             ) : (
-              <button type="button" onClick={send} disabled={!draft.trim()}>
+              <button type="button" data-primary onClick={() => send()} disabled={!draft.trim()}>
                 Enviar
               </button>
             )}
           </div>
         </div>
 
-        <TraceRail
-          last={last}
+        <Instruments
+          summary={summary}
           liveTrace={liveTrace}
           liveMemories={liveMemories}
           streaming={streaming}
