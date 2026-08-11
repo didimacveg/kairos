@@ -1,20 +1,40 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { api, type ChatResponse, type Health } from "@/lib/api";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  api,
+  streamChat,
+  type ChatStreamEnd,
+  type Health,
+  type MemoryHit,
+  type TraceEntry,
+} from "@/lib/api";
 import { TraceRail } from "./TraceRail";
 
 type Turn = { role: "user" | "assistant"; content: string };
 
+/** Resumen del último turno, tal y como lo consume el rail. */
+export type LastTurn = {
+  model: string;
+  latency_ms: number;
+  local: boolean;
+  memories: MemoryHit[];
+  trace: TraceEntry[];
+};
+
 export function Console({ username, onSignOut }: { username: string; onSignOut: () => void }) {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [draft, setDraft] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [streaming, setStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [last, setLast] = useState<ChatResponse | null>(null);
+  const [last, setLast] = useState<LastTurn | null>(null);
+  const [liveTrace, setLiveTrace] = useState<TraceEntry[]>([]);
+  const [liveMemories, setLiveMemories] = useState<MemoryHit[]>([]);
   const [health, setHealth] = useState<Health | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
+
   const bottom = useRef<HTMLDivElement>(null);
+  const abortRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     api.health().then(setHealth).catch(() => setHealth(null));
@@ -22,26 +42,71 @@ export function Console({ username, onSignOut }: { username: string; onSignOut: 
 
   useEffect(() => {
     bottom.current?.scrollIntoView({ behavior: "smooth" });
-  }, [turns.length, busy]);
+  }, [turns, streaming]);
 
-  async function send() {
+  // Si el componente se desmonta a media generación, cortamos el flujo para
+  // no dejar la petición viva contra el núcleo.
+  useEffect(() => () => abortRef.current?.(), []);
+
+  const send = useCallback(() => {
     const message = draft.trim();
-    if (!message || busy) return;
+    if (!message || streaming) return;
+
     setDraft("");
     setError(null);
-    setBusy(true);
-    setTurns((prev) => [...prev, { role: "user", content: message }]);
-    try {
-      const response = await api.chat(message, conversationId);
-      setConversationId(response.conversation_id);
-      setLast(response);
-      setTurns((prev) => [...prev, { role: "assistant", content: response.reply }]);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Fallo la peticion");
-    } finally {
-      setBusy(false);
-    }
-  }
+    setLiveTrace([]);
+    setLiveMemories([]);
+    setLast(null);
+    setStreaming(true);
+
+    // Turno del usuario + hueco vacío del asistente que iremos rellenando.
+    setTurns((prev) => [...prev, { role: "user", content: message }, { role: "assistant", content: "" }]);
+
+    abortRef.current = streamChat(message, conversationId, {
+      onToken: (text) => {
+        setTurns((prev) => {
+          const next = [...prev];
+          const target = next[next.length - 1];
+          if (target?.role === "assistant") {
+            next[next.length - 1] = { ...target, content: target.content + text };
+          }
+          return next;
+        });
+      },
+      onTrace: (trace, data) => {
+        if (trace) setLiveTrace((prev) => [...prev, trace]);
+        if (Array.isArray(data.memories)) setLiveMemories(data.memories as MemoryHit[]);
+        if (typeof data.conversation_id === "string") setConversationId(data.conversation_id);
+      },
+      onEnd: (summary: ChatStreamEnd) => {
+        setStreaming(false);
+        setConversationId(summary.conversation_id);
+        setLast({
+          model: summary.model ?? "desconocido",
+          latency_ms: summary.latency_ms ?? 0,
+          local: summary.local,
+          memories: summary.memories,
+          trace: summary.trace,
+        });
+      },
+      onError: (message) => {
+        setStreaming(false);
+        setError(message);
+        // Retiramos el turno vacío para no dejar una burbuja en blanco.
+        setTurns((prev) => {
+          const next = [...prev];
+          const target = next[next.length - 1];
+          if (target?.role === "assistant" && target.content === "") next.pop();
+          return next;
+        });
+      },
+    });
+  }, [draft, streaming, conversationId]);
+
+  const stop = useCallback(() => {
+    abortRef.current?.();
+    setStreaming(false);
+  }, []);
 
   const egressState = health?.egress_allowed ? "warn" : "offline";
 
@@ -72,20 +137,24 @@ export function Console({ username, onSignOut }: { username: string; onSignOut: 
                 memoria antes de responder y te mostrara a la derecha exactamente que consulto.
               </p>
             )}
-            {turns.map((turn, index) => (
-              <article className="turn" data-role={turn.role} key={index}>
-                <div className="who">{turn.role === "user" ? username : "kairos"}</div>
-                <div className="body">{turn.content}</div>
-              </article>
-            ))}
-            {busy && (
-              <article className="turn" data-role="assistant">
-                <div className="who">kairos</div>
-                <div className="body" style={{ color: "var(--muted)" }}>
-                  Recuperando memoria y generando…
-                </div>
-              </article>
-            )}
+
+            {turns.map((turn, index) => {
+              const isLast = index === turns.length - 1;
+              const pending = streaming && isLast && turn.role === "assistant";
+              return (
+                <article className="turn" data-role={turn.role} key={index}>
+                  <div className="who">{turn.role === "user" ? username : "kairos"}</div>
+                  <div className="body">
+                    {turn.content}
+                    {pending && <span className="caret" aria-hidden="true" />}
+                    {pending && turn.content === "" && (
+                      <span style={{ color: "var(--muted)" }}>Recuperando memoria…</span>
+                    )}
+                  </div>
+                </article>
+              );
+            })}
+
             {error && <div className="error">{error}</div>}
             <div ref={bottom} />
           </div>
@@ -100,17 +169,28 @@ export function Console({ username, onSignOut }: { username: string; onSignOut: 
               onKeyDown={(event) => {
                 if (event.key === "Enter" && !event.shiftKey) {
                   event.preventDefault();
-                  void send();
+                  send();
                 }
               }}
             />
-            <button type="button" onClick={() => void send()} disabled={busy || !draft.trim()}>
-              Enviar
-            </button>
+            {streaming ? (
+              <button type="button" onClick={stop}>
+                Detener
+              </button>
+            ) : (
+              <button type="button" onClick={send} disabled={!draft.trim()}>
+                Enviar
+              </button>
+            )}
           </div>
         </div>
 
-        <TraceRail last={last} />
+        <TraceRail
+          last={last}
+          liveTrace={liveTrace}
+          liveMemories={liveMemories}
+          streaming={streaming}
+        />
       </div>
     </div>
   );

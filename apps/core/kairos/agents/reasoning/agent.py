@@ -1,14 +1,15 @@
 """Reasoning Agent — genera respuestas a partir del contexto disponible.
 
-Fase 1: una sola pasada al modelo. Sin herramientas, sin planificacion, sin
-bucle. La estructura permite anadirlos en Fase 5 sin tocar la interfaz.
+Fase 1: una sola pasada al modelo. Fase 2A: la misma pasada, pero emitida por
+fragmentos. Sin herramientas, sin planificacion, sin bucle: eso es Fase 5.
 """
 from __future__ import annotations
 
 import time
+from collections.abc import AsyncIterator
 from typing import Any
 
-from kairos.agents.base import Agent, AgentRequest, AgentResponse, TraceEvent
+from kairos.agents.base import Agent, AgentRequest, AgentResponse, StreamEvent, TraceEvent
 from kairos.agents.reasoning.providers.base import ChatTurn, LLMProvider
 from kairos.config import get_settings
 
@@ -27,20 +28,24 @@ Reglas:
 
 class ReasoningAgent(Agent):
     name = "reasoning"
-    capabilities = frozenset({"reasoning.respond"})
+    capabilities = frozenset({"reasoning.respond", "reasoning.respond_stream"})
 
     def __init__(self, provider: LLMProvider) -> None:
         self._provider = provider
         self._settings = get_settings()
 
+    def _egress_blocked(self) -> str | None:
+        if not self._provider.local and not self._settings.allow_egress:
+            return "Proveedor remoto bloqueado: KAIROS_ALLOW_EGRESS esta desactivado"
+        return None
+
     async def handle(self, request: AgentRequest, **context: Any) -> AgentResponse:
         if request.capability != "reasoning.respond":
             return AgentResponse.failure(f"Capacidad no soportada: {request.capability}")
 
-        if not self._provider.local and not self._settings.allow_egress:
-            return AgentResponse.failure(
-                "Proveedor remoto bloqueado: KAIROS_ALLOW_EGRESS esta desactivado"
-            )
+        blocked = self._egress_blocked()
+        if blocked:
+            return AgentResponse.failure(blocked)
 
         try:
             turns = self._build_turns(request.payload)
@@ -72,6 +77,54 @@ class ReasoningAgent(Agent):
             ],
         )
 
+    async def handle_stream(
+        self, request: AgentRequest, **context: Any
+    ) -> AsyncIterator[StreamEvent]:
+        """Emite la respuesta por fragmentos.
+
+        Contrato: nunca lanza hacia arriba. Cualquier fallo sale como un
+        StreamEvent de tipo `error`, para que el orquestador pueda auditarlo
+        y cerrar el flujo de forma ordenada en vez de dejar al cliente
+        esperando una conexion muerta.
+        """
+        if request.capability != "reasoning.respond_stream":
+            yield StreamEvent(type="error", error=f"Capacidad no soportada: {request.capability}")
+            return
+
+        blocked = self._egress_blocked()
+        if blocked:
+            yield StreamEvent(type="error", error=blocked)
+            return
+
+        started = time.perf_counter()
+        try:
+            turns = self._build_turns(request.payload)
+            async for chunk in self._provider.complete_stream(turns):
+                if chunk.text:
+                    yield StreamEvent(type="token", text=chunk.text)
+                if chunk.done:
+                    yield StreamEvent(
+                        type="trace",
+                        trace=TraceEvent(
+                            agent=self.name,
+                            step="complete_stream",
+                            detail={
+                                "model": chunk.model,
+                                "local": self._provider.local,
+                                "turns": len(turns),
+                            },
+                            duration_ms=chunk.latency_ms
+                            or int((time.perf_counter() - started) * 1000),
+                        ),
+                        data={
+                            "model": chunk.model,
+                            "latency_ms": chunk.latency_ms,
+                            "local": self._provider.local,
+                        },
+                    )
+        except Exception as exc:  # noqa: BLE001
+            yield StreamEvent(type="error", error=f"{type(exc).__name__}: {exc}")
+
     def _build_turns(self, payload: dict[str, Any]) -> list[ChatTurn]:
         owner: str = payload.get("owner", "el propietario")
         memories: list[dict[str, Any]] = payload.get("memories", [])
@@ -80,9 +133,7 @@ class ReasoningAgent(Agent):
 
         system = SYSTEM_PROMPT.format(owner=owner)
         if memories:
-            lines = "\n".join(
-                f"- ({m['similarity']:.2f}) {m['content']}" for m in memories
-            )
+            lines = "\n".join(f"- ({m['similarity']:.2f}) {m['content']}" for m in memories)
             system += f"\n\nMEMORIA recuperada de conversaciones anteriores:\n{lines}\n"
 
         turns = [ChatTurn(role="system", content=system)]

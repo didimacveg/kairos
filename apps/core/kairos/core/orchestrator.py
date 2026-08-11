@@ -3,16 +3,24 @@
 Es deliberadamente aburrido: recupera memoria, llama al razonador, persiste y
 audita. Toda la inteligencia esta en los agentes; el nucleo solo define el
 orden y garantiza que nada se salte la auditoria.
+
+Fase 2A anade `chat_stream`. La diferencia importante con `chat` no es
+tecnica sino de garantias: en streaming los tokens ya han salido hacia el
+cliente cuando toca persistir. Si el flujo se corta a medias, se audita el
+fallo pero NO se escribe nada en la memoria semantica. Un recuerdo truncado
+contamina todas las busquedas futuras, y una memoria con basura es peor que
+una memoria vacia.
 """
 from __future__ import annotations
 
 import uuid
+from collections.abc import AsyncIterator
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from kairos.agents.base import AgentRequest, TraceEvent
+from kairos.agents.base import AgentRequest, StreamEvent, TraceEvent
 from kairos.agents.registry import AgentRegistry
 from kairos.audit import service as audit
 from kairos.db.models import Conversation, Message, User
@@ -44,6 +52,8 @@ class ChatResult:
 class KairosCore:
     def __init__(self, registry: AgentRegistry) -> None:
         self._registry = registry
+
+    # ----------------------------------------------------------------- chat
 
     async def chat(
         self,
@@ -100,31 +110,17 @@ class KairosCore:
             )
             raise RuntimeError(answer.error or "El agente de razonamiento fallo")
 
-        db.add(Message(conversation_id=conversation.id, role="user", content=message))
-        db.add(
-            Message(
-                conversation_id=conversation.id,
-                role="assistant",
-                content=answer.data["content"],
-                model=answer.data["model"],
-                latency_ms=answer.data["latency_ms"],
-            )
+        await self._persist_turn(
+            db,
+            conversation_id=conversation.id,
+            user_message=message,
+            reply=answer.data["content"],
+            model=answer.data["model"],
+            latency_ms=answer.data["latency_ms"],
         )
-        await db.commit()
 
         store = await memory.handle(
-            AgentRequest(
-                capability="memory.store",
-                actor_id=user.id,
-                correlation_id=correlation_id,
-                payload={
-                    "content": message,
-                    "kind": "episodic",
-                    "source": "chat",
-                    "meta": {"conversation_id": str(conversation.id)},
-                },
-            ),
-            db=db,
+            self._store_request(user.id, correlation_id, message, conversation.id), db=db
         )
         trace += store.trace
 
@@ -140,6 +136,7 @@ class KairosCore:
                 "local": answer.data["local"],
                 "latency_ms": answer.data["latency_ms"],
                 "memories_used": len(memories),
+                "streamed": False,
             },
         )
 
@@ -152,6 +149,183 @@ class KairosCore:
             memories=memories,
             trace=trace,
         )
+
+    # ---------------------------------------------------------- chat_stream
+
+    async def chat_stream(
+        self,
+        db: AsyncSession,
+        *,
+        user: User,
+        message: str,
+        conversation_id: uuid.UUID | None,
+    ) -> AsyncIterator[StreamEvent]:
+        correlation_id = uuid.uuid4()
+        trace: list[TraceEvent] = []
+
+        conversation = await self._get_or_create_conversation(db, user, conversation_id, message)
+        history = await self._recent_history(db, conversation.id)
+
+        memory = self._registry.find("memory.retrieve")
+        retrieval = await memory.handle(
+            AgentRequest(
+                capability="memory.retrieve",
+                actor_id=user.id,
+                correlation_id=correlation_id,
+                payload={"query": message},
+            ),
+            db=db,
+        )
+        memories = retrieval.data.get("hits", []) if retrieval.ok else []
+        trace += retrieval.trace
+        for event in retrieval.trace:
+            yield StreamEvent(type="trace", trace=event)
+        yield StreamEvent(
+            type="trace",
+            trace=None,
+            data={"memories": memories, "conversation_id": str(conversation.id)},
+        )
+
+        reasoning = self._registry.find("reasoning.respond_stream")
+        parts: list[str] = []
+        meta: dict[str, Any] = {}
+
+        async for event in reasoning.handle_stream(
+            AgentRequest(
+                capability="reasoning.respond_stream",
+                actor_id=user.id,
+                correlation_id=correlation_id,
+                payload={
+                    "message": message,
+                    "owner": user.username,
+                    "memories": memories,
+                    "history": history,
+                },
+            )
+        ):
+            if event.type == "token" and event.text:
+                parts.append(event.text)
+                yield event
+            elif event.type == "trace":
+                if event.trace is not None:
+                    trace.append(event.trace)
+                meta.update(event.data)
+                yield event
+            elif event.type == "error":
+                await audit.record(
+                    db,
+                    action="chat.respond",
+                    outcome="failure",
+                    actor_id=user.id,
+                    resource=str(conversation.id),
+                    correlation_id=correlation_id,
+                    detail={"error": event.error, "streamed": True, "partial_chars": len(
+                        "".join(parts)
+                    )},
+                )
+                yield event
+                return
+
+        reply = "".join(parts).strip()
+        if not reply:
+            await audit.record(
+                db,
+                action="chat.respond",
+                outcome="failure",
+                actor_id=user.id,
+                resource=str(conversation.id),
+                correlation_id=correlation_id,
+                detail={"error": "flujo vacio", "streamed": True},
+            )
+            yield StreamEvent(type="error", error="El modelo no devolvio contenido")
+            return
+
+        await self._persist_turn(
+            db,
+            conversation_id=conversation.id,
+            user_message=message,
+            reply=reply,
+            model=meta.get("model"),
+            latency_ms=meta.get("latency_ms"),
+        )
+
+        store = await memory.handle(
+            self._store_request(user.id, correlation_id, message, conversation.id), db=db
+        )
+        trace += store.trace
+        for event in store.trace:
+            yield StreamEvent(type="trace", trace=event)
+
+        await audit.record(
+            db,
+            action="chat.respond",
+            outcome="success",
+            actor_id=user.id,
+            resource=str(conversation.id),
+            correlation_id=correlation_id,
+            detail={
+                "model": meta.get("model"),
+                "local": meta.get("local"),
+                "latency_ms": meta.get("latency_ms"),
+                "memories_used": len(memories),
+                "streamed": True,
+            },
+        )
+
+        yield StreamEvent(
+            type="end",
+            data={
+                "conversation_id": str(conversation.id),
+                "model": meta.get("model"),
+                "latency_ms": meta.get("latency_ms"),
+                "local": meta.get("local", True),
+                "memories": memories,
+                "trace": [t.model_dump(mode="json") for t in trace],
+            },
+        )
+
+    # -------------------------------------------------------------- helpers
+
+    def _store_request(
+        self,
+        actor_id: uuid.UUID,
+        correlation_id: uuid.UUID,
+        content: str,
+        conversation_id: uuid.UUID,
+    ) -> AgentRequest:
+        return AgentRequest(
+            capability="memory.store",
+            actor_id=actor_id,
+            correlation_id=correlation_id,
+            payload={
+                "content": content,
+                "kind": "episodic",
+                "source": "chat",
+                "meta": {"conversation_id": str(conversation_id)},
+            },
+        )
+
+    async def _persist_turn(
+        self,
+        db: AsyncSession,
+        *,
+        conversation_id: uuid.UUID,
+        user_message: str,
+        reply: str,
+        model: str | None,
+        latency_ms: int | None,
+    ) -> None:
+        db.add(Message(conversation_id=conversation_id, role="user", content=user_message))
+        db.add(
+            Message(
+                conversation_id=conversation_id,
+                role="assistant",
+                content=reply,
+                model=model,
+                latency_ms=latency_ms,
+            )
+        )
+        await db.commit()
 
     async def _get_or_create_conversation(
         self,

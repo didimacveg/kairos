@@ -6,16 +6,19 @@ mismo proceso y se invocan por llamada directa a traves del registro. Cuando
 un agente necesite correr en otra maquina (Vision en la Raspberry, Fase 3),
 solo cambia el transporte: el contrato de abajo no se toca.
 
-Esa es toda la razon de que exista esta abstraccion. Si en algun momento
-anadir un agente no aporta un limite real de responsabilidad, no lo hagas:
-usa una funcion.
+Fase 2A anade una segunda forma de responder: en flujo. No se ha metido dentro
+de `handle` porque forzar a todo agente a devolver un generador complicaria a
+los que solo tienen una respuesta (Vision devuelve una deteccion, no un
+chorro de tokens). En su lugar hay un protocolo aparte, `StreamingAgent`, que
+implementan solo los agentes cuya salida es incremental.
 """
 from __future__ import annotations
 
 import uuid
 from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel, Field
 
@@ -52,6 +55,25 @@ class AgentResponse(BaseModel):
         return cls(ok=False, error=message, trace=trace or [])
 
 
+StreamEventType = Literal["token", "trace", "error", "end"]
+
+
+class StreamEvent(BaseModel):
+    """Fragmento de una respuesta incremental.
+
+    `token` lleva texto; `trace` lleva un TraceEvent ya cerrado; `end` cierra
+    el flujo con los metadatos finales; `error` lo aborta. Un flujo bien
+    formado termina SIEMPRE en `end` o en `error`, nunca en silencio: el
+    cliente necesita distinguir "ha terminado" de "se ha cortado la conexion".
+    """
+
+    type: StreamEventType
+    text: str | None = None
+    trace: TraceEvent | None = None
+    data: dict[str, Any] = Field(default_factory=dict)
+    error: str | None = None
+
+
 class Agent(ABC):
     """Interfaz que implementa todo agente de KAIROS."""
 
@@ -67,3 +89,17 @@ class Agent(ABC):
 
     def supports(self, capability: str) -> bool:
         return capability in self.capabilities
+
+
+@runtime_checkable
+class StreamingAgent(Protocol):
+    """Agente capaz de emitir su respuesta por partes.
+
+    Es un Protocol y no una clase base para que un agente pueda adquirir la
+    capacidad sin cambiar su jerarquia de herencia. `isinstance` funciona por
+    el decorador runtime_checkable.
+    """
+
+    async def handle_stream(
+        self, request: AgentRequest, **context: Any
+    ) -> AsyncIterator[StreamEvent]: ...
