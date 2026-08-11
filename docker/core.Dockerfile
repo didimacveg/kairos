@@ -11,7 +11,7 @@ RUN groupadd --gid 10001 kairos && \
     mkdir -p /var/lib/kairos && chown kairos:kairos /var/lib/kairos
 
 COPY apps/core/pyproject.toml /app/pyproject.toml
-RUN pip install --no-cache-dir -e /app 2>/dev/null || pip install --no-cache-dir \
+RUN pip install --no-cache-dir -e "/app[dev]" 2>/dev/null || pip install --no-cache-dir \
     "fastapi>=0.115" "uvicorn[standard]>=0.32" "sqlalchemy[asyncio]>=2.0" \
     "asyncpg>=0.30" "pgvector>=0.3" "pydantic>=2.9" "pydantic-settings>=2.6" \
     "argon2-cffi>=23.1" "httpx>=0.27" "structlog>=24.4" "python-multipart>=0.0.12" \

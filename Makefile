@@ -31,7 +31,7 @@ user: ## Crea el usuario propietario (interactivo)
 	$(COMPOSE) exec core python -m kairos.cli create-user
 
 test: ## Ejecuta la suite de tests del core
-	$(COMPOSE) exec core pytest -q
+	$(COMPOSE) exec core pytest -q -p no:cacheprovider
 
 lint: ## Linter + tipos
 	$(COMPOSE) exec core ruff check kairos tests
