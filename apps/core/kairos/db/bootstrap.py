@@ -31,10 +31,22 @@ APPEND_ONLY_GUARD = [
 ]
 
 
+MEMORY_CURATION_2B = [
+    "ALTER TABLE memory_items ADD COLUMN IF NOT EXISTS status VARCHAR(16) NOT NULL DEFAULT 'active'",
+    "ALTER TABLE memory_items ADD COLUMN IF NOT EXISTS superseded_by UUID",
+    "ALTER TABLE memory_items ADD COLUMN IF NOT EXISTS superseded_at TIMESTAMPTZ",
+    "CREATE INDEX IF NOT EXISTS ix_memory_items_owner_status ON memory_items (owner_id, status)",
+    "ALTER TABLE memory_items ADD COLUMN IF NOT EXISTS subject VARCHAR(48) NOT NULL DEFAULT ''",
+    "CREATE INDEX IF NOT EXISTS ix_memory_items_subject ON memory_items (owner_id, subject, status)",
+]
+
+
 async def create_schema() -> None:
     engine = get_engine()
     async with engine.begin() as conn:
         await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         await conn.run_sync(Base.metadata.create_all)
         for statement in APPEND_ONLY_GUARD:
+            await conn.exec_driver_sql(statement)
+        for statement in MEMORY_CURATION_2B:
             await conn.exec_driver_sql(statement)

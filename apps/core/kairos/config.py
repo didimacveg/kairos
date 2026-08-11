@@ -44,7 +44,11 @@ class Settings(BaseSettings):
     openai_api_key: str | None = Field(None, alias="OPENAI_API_KEY")
 
     memory_top_k: int = Field(6, alias="KAIROS_MEMORY_TOP_K")
-    memory_min_similarity: float = Field(0.35, alias="KAIROS_MEMORY_MIN_SIMILARITY")
+    memory_min_similarity: float = Field(0.55, alias="KAIROS_MEMORY_MIN_SIMILARITY")
+    # >= duplicate: ya lo sabemos, no se guarda.
+    # >= supersede: mismo tema con dato nuevo, el viejo pasa a superseded.
+    memory_duplicate_threshold: float = Field(0.95, alias="KAIROS_MEMORY_DUPLICATE_THRESHOLD")
+    memory_supersede_threshold: float = Field(0.82, alias="KAIROS_MEMORY_SUPERSEDE_THRESHOLD")
 
     @computed_field  # type: ignore[prop-decorator]
     @property

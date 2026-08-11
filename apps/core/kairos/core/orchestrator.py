@@ -120,7 +120,14 @@ class KairosCore:
         )
 
         store = await memory.handle(
-            self._store_request(user.id, correlation_id, message, conversation.id), db=db
+            self._ingest_request(
+                user.id,
+                correlation_id,
+                message,
+                answer.data["content"],
+                conversation.id,
+            ),
+            db=db,
         )
         trace += store.trace
 
@@ -250,7 +257,8 @@ class KairosCore:
         )
 
         store = await memory.handle(
-            self._store_request(user.id, correlation_id, message, conversation.id), db=db
+            self._ingest_request(user.id, correlation_id, message, reply, conversation.id),
+            db=db,
         )
         trace += store.trace
         for event in store.trace:
@@ -286,20 +294,27 @@ class KairosCore:
 
     # -------------------------------------------------------------- helpers
 
-    def _store_request(
+    def _ingest_request(
         self,
         actor_id: uuid.UUID,
         correlation_id: uuid.UUID,
-        content: str,
+        user_message: str,
+        assistant_reply: str,
         conversation_id: uuid.UUID,
     ) -> AgentRequest:
+        """Fase 2B: se pasa el intercambio completo, no solo el mensaje.
+
+        Antes se indexaba el mensaje del usuario tal cual, lo que llenaba la
+        memoria de preguntas y peticiones. Ahora el MemoryAgent decide si hay
+        algun hecho duradero y consolida contra lo ya guardado.
+        """
         return AgentRequest(
-            capability="memory.store",
+            capability="memory.ingest",
             actor_id=actor_id,
             correlation_id=correlation_id,
             payload={
-                "content": content,
-                "kind": "episodic",
+                "user_message": user_message,
+                "assistant_reply": assistant_reply,
                 "source": "chat",
                 "meta": {"conversation_id": str(conversation_id)},
             },

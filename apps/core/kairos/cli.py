@@ -12,6 +12,7 @@ import getpass
 import sys
 
 from kairos.auth.service import create_user, get_user_by_username
+from kairos.agents.memory.audit import review
 from kairos.db.bootstrap import create_schema
 from kairos.db.session import get_session_factory
 
@@ -40,12 +41,30 @@ async def _create_user() -> None:
     print(f"Usuario creado: {user.username} ({user.role})")
 
 
+async def _memory_audit(apply: bool) -> None:
+    async with get_session_factory()() as db:
+        verdicts, total = await review(db, apply=apply)
+    if not verdicts:
+        print(f"Memoria limpia: {total} recuerdos activos, nada que retirar.")
+        return
+    print(f"{len(verdicts)} de {total} recuerdos activos no parecen hechos:\n")
+    for v in verdicts:
+        print(f"  [{v.reason}] {v.content[:80]}")
+    if apply:
+        print(f"\nRetirados {len(verdicts)} (status=discarded, reversible).")
+    else:
+        print("\nNada modificado. Para aplicarlo: memory-audit --apply")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="kairos")
-    parser.add_argument("command", choices=["migrate", "create-user"])
+    parser.add_argument("command", choices=["migrate", "create-user", "memory-audit"])
+    parser.add_argument("--apply", action="store_true")
     args = parser.parse_args()
     if args.command == "migrate":
         asyncio.run(_migrate())
+    elif args.command == "memory-audit":
+        asyncio.run(_memory_audit(args.apply))
     else:
         asyncio.run(_create_user())
 

@@ -114,6 +114,17 @@ class MemoryItem(Base):
     source: Mapped[str] = mapped_column(String(64), default="chat")
     embedding: Mapped[list[float]] = mapped_column(Vector(EMBEDDING_DIM))
     meta: Mapped[dict[str, object]] = mapped_column(JSON, default=dict)
+    # Curado (Fase 2B). active | superseded | discarded.
+    # Nada se borra: un recuerdo retirado sigue en la tabla y es reversible.
+    # Tema del hecho. Dos recuerdos con el mismo subject ocupan la misma
+    # casilla: el nuevo sustituye al viejo. La similitud de embeddings sirve
+    # para recuperar, no para decidir identidad — son problemas distintos.
+    subject: Mapped[str] = mapped_column(String(48), default="", server_default="")
+    status: Mapped[str] = mapped_column(String(16), default="active", server_default="active")
+    superseded_by: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True)
+    superseded_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (
