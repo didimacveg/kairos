@@ -261,3 +261,36 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 @keyframes caret-blink {
   to { visibility: hidden; }
 }
+
+/* --- captura de voz (Fase 2C) -------------------------------------------- */
+
+.mic {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  align-items: flex-end;
+}
+
+.mic button[data-recording] {
+  border-color: var(--alert);
+  color: var(--alert);
+  animation: mic-pulse 1.4s ease-in-out infinite;
+}
+
+.mic button[data-recording]:hover:not(:disabled) {
+  background: var(--alert);
+  color: var(--graphite);
+}
+
+.mic-error {
+  font-family: var(--font-mono);
+  font-size: var(--micro);
+  color: var(--alert);
+  max-width: 16rem;
+  text-align: right;
+  line-height: 1.4;
+}
+
+@keyframes mic-pulse {
+  50% { opacity: 0.55; }
+}

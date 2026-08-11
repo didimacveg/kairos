@@ -50,6 +50,25 @@ services:
     security_opt:
       - no-new-privileges:true
 
+  voice:
+    build:
+      context: .
+      dockerfile: docker/voice.Dockerfile
+    container_name: kairos-voice
+    restart: unless-stopped
+    environment:
+      KAIROS_WHISPER_MODEL: ${KAIROS_WHISPER_MODEL:-medium}
+      KAIROS_WHISPER_DEVICE: ${KAIROS_WHISPER_DEVICE:-cuda}
+      KAIROS_WHISPER_COMPUTE: ${KAIROS_WHISPER_COMPUTE:-int8_float16}
+      KAIROS_WHISPER_LANGUAGE: ${KAIROS_WHISPER_LANGUAGE:-es}
+    volumes:
+      - whisper:/var/lib/kairos/models
+    # Sin `ports`: solo accesible desde la red interna de Docker.
+    # Sin GPU: Whisper corre en CPU para dejar la VRAM entera al modelo de
+    # razonamiento. Transcribir es una rafaga; razonar es el bucle principal.
+    security_opt:
+      - no-new-privileges:true
+
   core:
     build:
       context: .
@@ -60,6 +79,7 @@ services:
     environment:
       POSTGRES_HOST: postgres
       KAIROS_OLLAMA_URL: http://ollama:11434
+      KAIROS_VOICE_URL: http://voice:8100
       KAIROS_BIND_HOST: 0.0.0.0
     depends_on:
       postgres:
@@ -94,12 +114,21 @@ services:
       KAIROS_CORE_URL: http://core:8000
     depends_on:
       - core
+    volumes:
+      # Sin esto, la imagen lleva una copia congelada del frontend y los
+      # cambios en disco no llegan nunca al contenedor. `next dev` recarga
+      # en caliente solo si ve los ficheros reales.
+      - ./apps/web/app:/app/app
+      - ./apps/web/components:/app/components
+      - ./apps/web/lib:/app/lib
+      - ./apps/web/next.config.mjs:/app/next.config.mjs
     ports:
       - "127.0.0.1:3000:3000"
     security_opt:
       - no-new-privileges:true
 
 volumes:
+  whisper:
   pgdata:
   ollama:
   corestate:

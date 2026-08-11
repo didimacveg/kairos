@@ -9,6 +9,7 @@ import {
   type MemoryHit,
   type TraceEntry,
 } from "@/lib/api";
+import { MicButton } from "./MicButton";
 import { TraceRail } from "./TraceRail";
 
 type Turn = { role: "user" | "assistant"; content: string };
@@ -172,6 +173,12 @@ export function Console({ username, onSignOut }: { username: string; onSignOut: 
                   send();
                 }
               }}
+            />
+            <MicButton
+              disabled={streaming}
+              onTranscript={(text) =>
+                setDraft((prev) => (prev ? `${prev} ${text}` : text))
+              }
             />
             {streaming ? (
               <button type="button" onClick={stop}>

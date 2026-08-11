@@ -39,6 +39,9 @@ class Settings(BaseSettings):
     embedding_dim: int = Field(768, alias="KAIROS_EMBEDDING_DIM")
     llm_timeout_seconds: int = Field(120, alias="KAIROS_LLM_TIMEOUT_SECONDS")
 
+    voice_url: str = Field("http://voice:8100", alias="KAIROS_VOICE_URL")
+    voice_timeout_seconds: int = Field(180, alias="KAIROS_VOICE_TIMEOUT_SECONDS")
+
     allow_egress: bool = Field(False, alias="KAIROS_ALLOW_EGRESS")
     anthropic_api_key: str | None = Field(None, alias="ANTHROPIC_API_KEY")
     openai_api_key: str | None = Field(None, alias="OPENAI_API_KEY")

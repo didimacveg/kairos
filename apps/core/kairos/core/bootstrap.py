@@ -10,6 +10,7 @@ from kairos.agents.memory.extractor import FactExtractor
 from kairos.agents.reasoning.agent import ReasoningAgent
 from kairos.agents.reasoning.providers.ollama import OllamaProvider
 from kairos.agents.registry import AgentRegistry
+from kairos.agents.voice.agent import VoiceAgent
 from kairos.core.orchestrator import KairosCore
 
 
@@ -18,4 +19,5 @@ def build_core() -> KairosCore:
     registry = AgentRegistry()
     registry.register(MemoryAgent(embedder=provider, extractor=FactExtractor(provider)))
     registry.register(ReasoningAgent(provider=provider))
+    registry.register(VoiceAgent())
     return KairosCore(registry)

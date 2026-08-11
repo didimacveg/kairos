@@ -53,6 +53,12 @@ class KairosCore:
     def __init__(self, registry: AgentRegistry) -> None:
         self._registry = registry
 
+    @property
+    def registry(self) -> AgentRegistry:
+        """Acceso de solo lectura para rutas que invocan un agente directo
+        (transcripcion), sin pasar por el flujo de conversacion."""
+        return self._registry
+
     # ----------------------------------------------------------------- chat
 
     async def chat(
