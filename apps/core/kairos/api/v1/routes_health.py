@@ -12,7 +12,9 @@ router = APIRouter(tags=["health"])
 async def health(request: Request) -> HealthResponse:
     settings = get_settings()
     agents = await request.app.state.core.health()
-    degraded = any(a.get("status") not in {"ok", "unknown"} for a in agents)
+    # "disabled" es una decision del usuario (p.ej. busqueda sin egress),
+    # no una averia. Solo degrada lo que deberia funcionar y no funciona.
+    degraded = any(a.get("status") not in {"ok", "unknown", "disabled"} for a in agents)
     return HealthResponse(
         status="degraded" if degraded else "ok",
         instance=settings.instance_name,

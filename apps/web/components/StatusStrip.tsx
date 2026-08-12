@@ -35,7 +35,8 @@ export function StatusStrip({
   onSignOut: () => void;
 }) {
   const agentsUp = health?.agents.filter((a) => a.status === "ok").length ?? 0;
-  const agentsTotal = health?.agents.length ?? 0;
+  // Los desactivados no salen en la cuenta: no estan rotos, estan apagados.
+  const agentsTotal = health?.agents.filter((a) => a.status !== "disabled").length ?? 0;
   const degraded = agentsTotal > 0 && agentsUp < agentsTotal;
 
   return (

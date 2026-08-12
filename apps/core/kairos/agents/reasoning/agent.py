@@ -9,9 +9,31 @@ import time
 from collections.abc import AsyncIterator
 from typing import Any
 
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 from kairos.agents.base import Agent, AgentRequest, AgentResponse, StreamEvent, TraceEvent
 from kairos.agents.reasoning.providers.base import ChatTurn, LLMProvider
 from kairos.config import get_settings
+
+DIAS = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"]
+MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
+         "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
+
+
+def ahora(tz: str) -> str:
+    """Fecha y hora reales, en el idioma del usuario.
+
+    Sin esto el modelo no sabe que dia es — no porque sea tonto, sino porque
+    nadie se lo habia dicho nunca. Era el descuido mas barato de arreglar.
+    """
+    try:
+        now = datetime.now(ZoneInfo(tz))
+    except Exception:  # noqa: BLE001
+        now = datetime.now()
+    return (f"{DIAS[now.weekday()]} {now.day} de {MESES[now.month - 1]} "
+            f"de {now.year}, {now:%H:%M}")
+
 
 SYSTEM_PROMPT = """Eres KAIROS, el sistema personal de {owner}.
 Funcionas integramente en su maquina: ningun dato de esta conversacion sale de ella.
@@ -23,9 +45,16 @@ Reglas:
   varios parrafos con el detalle necesario. No te autolimites.
 - Nada de relleno ni halagos: extension no es paja. Si desarrollas, que cada
   frase anada informacion.
-- Usa el bloque MEMORIA con naturalidad: no lo menciones, no cites
-  similitudes ni digas de donde sale la informacion. La trazabilidad
-  la muestra la interfaz, no tu.
+- El bloque MEMORIA es contexto, no tema de conversacion. NUNCA lo menciones:
+  ni "recupere informacion", ni "segun conversaciones anteriores", ni citas de
+  similitud como (0.54). {owner} ya sabe lo que te ha contado. Usa el dato y
+  ya esta, como haria una persona que se acuerda.
+- Si un recuerdo no viene a cuento, ignoralo en silencio. No expliques que lo
+  has descartado.
+- Si hay un bloque BUSQUEDA WEB, usalo: es informacion recien consultada y
+  vale mas que lo que creas recordar. Cita [1], [2] al dar datos concretos.
+- Si NO hay bloque de busqueda y te preguntan por algo de hoy que no puedes
+  saber, dilo en UNA frase y para. Nada de parrafos de excusas.
 - Si no sabes algo, dilo. No inventes hechos sobre {owner}.
 """
 
@@ -135,7 +164,22 @@ class ReasoningAgent(Agent):
         history: list[dict[str, str]] = payload.get("history", [])
         message: str = payload["message"]
 
+        settings = self._settings
         system = SYSTEM_PROMPT.format(owner=owner)
+        system += f"\n\nAhora mismo son las {ahora(settings.timezone)} ({settings.timezone}).\n"
+
+        sources: list[dict[str, str]] = payload.get("sources", [])
+        if sources:
+            lines = "\n".join(
+                f"[{i + 1}] {s['title']} — {s['snippet']} ({s['url']})"
+                for i, s in enumerate(sources)
+            )
+            system += (
+                "\nBUSQUEDA WEB recien hecha para esta pregunta:\n" + lines + "\n"
+                "Responde a partir de estas fuentes. Si no contienen lo que se pregunta,\n"
+                "dilo claramente en vez de rellenar con lo que crees recordar. Cita la\n"
+                "fuente entre corchetes cuando des un dato concreto.\n"
+            )
         if memories:
             lines = "\n".join(f"- ({m['similarity']:.2f}) {m['content']}" for m in memories)
             system += f"\n\nMEMORIA recuperada de conversaciones anteriores:\n{lines}\n"

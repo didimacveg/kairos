@@ -3,32 +3,37 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Listener } from "@/lib/listen";
 
-type Stage = "off" | "calibrating" | "listening" | "hearing" | "working";
+type Stage = "off" | "calibrating" | "listening" | "hearing" | "working" | "watching";
 
 /**
- * Sesión de voz manos libres.
+ * Sesión de voz manos libres, con interrupción.
  *
- * Un solo interruptor. Mientras está encendido: escucha, detecta cuándo
- * terminas de hablar, transcribe y envía. Sin pulsar tres botones por turno.
+ * Un solo interruptor (o Alt+K). Mientras está encendido el micrófono NUNCA
+ * se cierra: cuando es tu turno graba, y mientras KAIROS habla vigila el nivel
+ * para detectar que le cortas.
+ *
+ * Interrumpir significa interrumpir: se aborta la generación en curso, se
+ * calla la voz, y tu nueva frase entra limpia. Antes se solapaban dos voces
+ * porque el sistema seguía hablando de lo anterior.
  *
  * Si Whisper no está seguro de lo que oyó, NO envía: pide que lo repitas.
- * Con la memoria curada, un mensaje enviado puede convertirse en un hecho
- * permanente — repetir una frase cuesta mucho menos que ir a borrarlo.
- *
- * El medidor de nivel es funcional, no decorativo: sin él no hay forma de
- * distinguir "el micro no capta" de "no me estás entendiendo".
+ * Con la memoria curada, un mensaje enviado puede volverse un hecho permanente.
  */
 export function VoiceSession({
   active,
   onToggle,
   onUtterance,
   onSay,
+  onInterrupt,
+  onHush,
   busy,
 }: {
   active: boolean;
   onToggle: (next: boolean) => void;
   onUtterance: (text: string) => void;
   onSay: (message: string) => void;
+  onInterrupt: () => void;
+  onHush: () => void;
   busy: boolean;
 }) {
   const [stage, setStage] = useState<Stage>("off");
@@ -36,7 +41,6 @@ export function VoiceSession({
   const [note, setNote] = useState<string | null>(null);
   const listenerRef = useRef<Listener | null>(null);
   const activeRef = useRef(active);
-
   activeRef.current = active;
 
   const transcribe = useCallback(
@@ -71,16 +75,16 @@ export function VoiceSession({
         onUtterance(data.text.trim());
       } catch (err) {
         setNote(err instanceof Error ? err.message : "Fallo al transcribir");
+        setStage("listening");
       }
     },
     [onSay, onUtterance],
   );
 
-  const cycle = useCallback(() => {
+  const beginTurn = useCallback(() => {
     if (!activeRef.current) return;
     setNote(null);
     setStage("calibrating");
-
     const listener = new Listener(
       {
         onLevel: setLevel,
@@ -99,8 +103,27 @@ export function VoiceSession({
     });
   }, [transcribe]);
 
-  // Reabre la escucha cuando KAIROS termina de responder: así la conversación
-  // continúa sin volver a tocar nada.
+  const beginWatch = useCallback(() => {
+    if (!activeRef.current) return;
+    setStage("watching");
+    const listener = new Listener({
+      onLevel: setLevel,
+      onSpeechStart: () => undefined,
+      onDone: () => undefined,
+      onFault: () => undefined,
+    });
+    listenerRef.current = listener;
+    void listener.watch(
+      () => {
+        onInterrupt();
+        // Encadena el turno nuevo: le has cortado para decir algo.
+        setTimeout(beginTurn, 100);
+      },
+      // Silenciado inmediato: en cuanto abres la boca, KAIROS se calla.
+      onHush,
+    );
+  }, [beginTurn, onInterrupt, onHush]);
+
   useEffect(() => {
     if (!active) {
       listenerRef.current?.abort();
@@ -109,24 +132,31 @@ export function VoiceSession({
       setLevel(0);
       return;
     }
-    if (!busy && (stage === "off" || stage === "working")) {
-      const id = setTimeout(cycle, 350);
+    // Turno de KAIROS: vigilar. Turno del usuario: grabar.
+    if (busy && stage !== "watching") {
+      listenerRef.current?.abort();
+      const id = setTimeout(beginWatch, 150);
       return () => clearTimeout(id);
     }
-  }, [active, busy, stage, cycle]);
+    if (!busy && (stage === "off" || stage === "working" || stage === "watching")) {
+      listenerRef.current?.abort();
+      const id = setTimeout(beginTurn, 300);
+      return () => clearTimeout(id);
+    }
+  }, [active, busy, stage, beginTurn, beginWatch]);
 
   useEffect(() => () => listenerRef.current?.abort(), []);
 
   const caption: Record<Stage, string> = {
-    off: "Sesión de voz",
-    calibrating: "Calibrando ruido",
+    off: "Voz apagada",
+    calibrating: "Calibrando",
     listening: "Escuchando",
     hearing: "Te oigo",
     working: "Procesando",
+    watching: "Puedes interrumpir",
   };
 
-  // 0.25 de RMS es un grito a un palmo del micro: normaliza bien el rango útil.
-  const bars = 16;
+  const bars = 18;
   const lit = Math.min(bars, Math.round((level / 0.25) * bars));
 
   return (
@@ -136,14 +166,15 @@ export function VoiceSession({
         onClick={() => onToggle(!active)}
         data-live={active || undefined}
         aria-pressed={active}
+        title="Alt+K"
       >
-        {active ? "Cortar voz" : "Voz"}
+        {active ? "Cortar voz" : "Voz · Alt+K"}
       </button>
 
       {active && (
         <div className="vu" aria-hidden="true">
           {Array.from({ length: bars }, (_, index) => (
-            <i key={index} data-lit={index < lit || undefined} data-hot={index > 12 || undefined} />
+            <i key={index} data-lit={index < lit || undefined} data-hot={index > 14 || undefined} />
           ))}
         </div>
       )}

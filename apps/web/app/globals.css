@@ -881,3 +881,222 @@ button:disabled { opacity: 0.35; cursor: not-allowed; }
   .ring-listen[data-live] { animation: none; }
   .ring-sweep[data-live] { opacity: 0.6; }
 }
+
+/* ==========================================================================
+   FASE 2I — HUD
+   La paleta pasa a dominancia cian: es el registro visual que el usuario
+   pide. El latón se reserva para el anillo de datos, que solo se mueve
+   cuando el modelo genera — así el color caliente sigue significando
+   "la máquina está trabajando".
+   ========================================================================== */
+
+:root {
+  --ice: #58e6ff;
+  --ice-dim: #1e6b7d;
+  --ice-glow: rgba(88, 230, 255, 0.55);
+  --brass: #ffc247;
+  --brass-glow: rgba(255, 194, 71, 0.5);
+}
+
+.sigil-text {
+  font-family: var(--ui);
+  font-size: 17px;
+  font-weight: 300;
+  letter-spacing: 0.3em;
+  fill: var(--bone);
+  filter: drop-shadow(0 0 14px var(--ice-glow));
+}
+
+.sigil-mark small {
+  font-family: var(--data);
+  font-size: 0.5625rem;
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.sigil[data-busy] .sigil-mark small { color: var(--ice); }
+
+.stage .sigil svg {
+  width: min(52vh, 34rem);
+  filter: drop-shadow(0 0 60px rgba(88, 230, 255, 0.18));
+}
+
+/* --- elementos con dato detrás -------------------------------------------- */
+
+.ring-agents {
+  transition: stroke-dasharray 0.6s ease;
+  filter: drop-shadow(0 0 10px var(--ice-glow));
+}
+
+.segments path[data-lit] { filter: drop-shadow(0 0 8px var(--ice-glow)); }
+
+.ring-sweep { transform-origin: 200px 200px; opacity: 0; transition: opacity 0.3s ease; }
+.ring-sweep[data-live] { opacity: 1; animation: hud-spin 1.7s linear infinite; }
+
+.ring-data,
+.ring-counter { transform-origin: 200px 200px; }
+
+.ring-data[data-live] {
+  animation: hud-spin 10s linear infinite;
+  filter: drop-shadow(0 0 10px var(--brass-glow));
+}
+
+.ring-counter[data-live] { animation: hud-spin-back 6s linear infinite; }
+
+.ring-listen[data-live] {
+  animation: hud-pulse 1.5s ease-in-out infinite;
+  filter: drop-shadow(0 0 14px var(--ember-glow));
+}
+
+.core-dot { filter: drop-shadow(0 0 16px var(--ice-glow)); }
+
+@keyframes hud-spin { to { transform: rotate(360deg); } }
+@keyframes hud-spin-back { to { transform: rotate(-360deg); } }
+@keyframes hud-pulse { 50% { opacity: 0.28; } }
+
+/* --- estado "puedes interrumpir" ------------------------------------------ */
+
+.voice-state[data-stage="watching"] { color: var(--ice); }
+.voice-state[data-stage="hearing"] { color: var(--ember); }
+.voice-state[data-stage="listening"] { color: var(--brass); }
+
+@media (prefers-reduced-motion: reduce) {
+  .ring-sweep[data-live],
+  .ring-data[data-live],
+  .ring-counter[data-live],
+  .ring-listen[data-live] { animation: none; }
+}
+
+/* ==========================================================================
+   FASE 3 — paleta azul/violeta
+   Fuera el rojo y el ambar. El sistema pasa a dos familias:
+
+     cian     el sistema midiendo y trabajando (lo habitual)
+     violeta  atencion del usuario: micrófono abierto, datos saliendo
+
+   La regla no cambia: el color codifica estado. Que ahora sea violeta en vez
+   de rojo no lo convierte en decoración — sigue significando exactamente lo
+   mismo.
+   ========================================================================== */
+
+:root {
+  --void: #05070d;
+  --deck: #090f1a;
+  --panel: #0c1420;
+  --rule: #14202f;
+  --rule-bright: #1f3348;
+
+  --bone: #e6ecf2;
+  --dim: #6d8199;
+  --faint: #3d5063;
+
+  --ice: #4fd8ff;
+  --ice-dim: #1a5d78;
+  --ice-glow: rgba(79, 216, 255, 0.55);
+
+  /* El "latón" pasa a violeta: mismo papel semántico, otro color. */
+  --brass: #a678ff;
+  --brass-dim: #4a3288;
+  --brass-glow: rgba(166, 120, 255, 0.55);
+
+  /* Atención máxima: micrófono abierto, salida de datos permitida. */
+  --ember: #c04cff;
+  --ember-glow: rgba(192, 76, 255, 0.5);
+}
+
+body::before {
+  background-image:
+    linear-gradient(rgba(79, 216, 255, 0.09) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(166, 120, 255, 0.07) 1px, transparent 1px);
+  opacity: 0.55;
+}
+
+.stage .sigil svg {
+  width: min(56vh, 38rem);
+  filter: drop-shadow(0 0 70px rgba(79, 216, 255, 0.2));
+}
+
+.sigil-text {
+  font-size: 16px;
+  letter-spacing: 0.34em;
+  fill: var(--bone);
+  filter: drop-shadow(0 0 16px var(--ice-glow));
+}
+
+/* Halo del disco central: respira despacio siempre que hay contacto con el
+   núcleo, y se acelera al generar. Es el pulso del sistema. */
+.core-halo {
+  transform-origin: 200px 200px;
+  animation: halo-breathe 4.5s ease-in-out infinite;
+}
+
+.sigil[data-busy] .core-halo { animation-duration: 1.4s; }
+
+@keyframes halo-breathe {
+  50% { opacity: 0.35; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .core-halo { animation: none; }
+}
+
+/* ==========================================================================
+   FASE 3B — el sigilo respira
+   El movimiento en reposo NO es decoración gratuita: solo ocurre mientras hay
+   contacto con el núcleo. Si el núcleo cae, todo se congela de golpe — que es
+   precisamente la señal que quieres ver cuando algo va mal.
+   ========================================================================== */
+
+.sigil-text {
+  font-size: 15px;
+  letter-spacing: normal;   /* textLength ya reparte el espaciado */
+}
+
+/* --- rotaciones de reposo, todas muy lentas ------------------------------- */
+
+.idle-slow,
+.idle-slower,
+.idle-drift,
+.idle-inner {
+  transform-origin: 200px 200px;
+  animation-play-state: paused;
+}
+
+.sigil[data-alive] .idle-slow { animation: idle-cw 150s linear infinite; }
+.sigil[data-alive] .idle-slower { animation: idle-ccw 210s linear infinite; }
+.sigil[data-alive] .idle-drift { animation: idle-cw 320s linear infinite; }
+.sigil[data-alive] .idle-inner { animation: idle-ccw 95s linear infinite; }
+
+.sigil[data-alive] .idle-slow,
+.sigil[data-alive] .idle-slower,
+.sigil[data-alive] .idle-drift,
+.sigil[data-alive] .idle-inner { animation-play-state: running; }
+
+/* Al generar, el sistema se acelera: mismo movimiento, cuatro veces más vivo. */
+.sigil[data-busy][data-alive] .idle-slow { animation-duration: 38s; }
+.sigil[data-busy][data-alive] .idle-slower { animation-duration: 52s; }
+.sigil[data-busy][data-alive] .idle-inner { animation-duration: 24s; }
+
+@keyframes idle-cw { to { transform: rotate(360deg); } }
+@keyframes idle-ccw { to { transform: rotate(-360deg); } }
+
+/* --- respiración: el pulso del sistema ------------------------------------ */
+
+.sigil[data-alive] .ring-agents { animation: agents-breathe 6s ease-in-out infinite; }
+.sigil[data-alive] .segments { animation: segments-breathe 8s ease-in-out infinite; }
+
+@keyframes agents-breathe {
+  50% { opacity: 0.62; }
+}
+
+@keyframes segments-breathe {
+  50% { opacity: 0.78; }
+}
+
+/* Núcleo apagado: nada se mueve. Es información, no un fallo de estilo. */
+.sigil:not([data-alive]) * { animation: none !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  .sigil * { animation: none !important; }
+}

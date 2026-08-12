@@ -3,22 +3,41 @@
 import type { Health } from "@/lib/api";
 
 /**
- * Sigilo K.A.I.R.O.S — el núcleo visible del sistema.
+ * Sigilo K.A.I.R.O.S — interfaz de estado del sistema.
  *
- * Es la pieza central de la interfaz y lo sigue siendo mientras KAIROS
- * responde. La regla del proyecto no cambia: **cada elemento codifica un
- * estado real**.
+ * Distinción que gobierna todo este componente: **estructura ornamental fija
+ * SÍ; movimiento o dato falsos NO.**
  *
- *   arco exterior   fracción de agentes que responden al health check
- *   anillo de datos gira solo mientras el modelo genera
- *   contra-anillo   gira al revés; da profundidad y marca la misma actividad
- *   marcas de memoria  una por recuerdo consultado en el último turno
- *   anillo interior pulsa solo cuando el micrófono escucha
- *   núcleo          rojo si hay salida a Internet permitida
+ * Un anillo grabado que siempre se ve igual no miente sobre nada — es la caja
+ * del instrumento. Lo que no se hace es inventar telemetría: nada gira, se
+ * enciende o cambia de longitud si no hay un valor real detrás.
  *
- * Si el sistema está parado, el sigilo está quieto. Un adorno que gira siempre
- * no dice nada; uno que gira cuando la máquina piensa te dice que piensa.
+ * Elementos con dato:
+ *   arco de agentes   fracción que responde al health check
+ *   barrido           gira solo mientras el modelo genera
+ *   anillo de datos   ídem, más lento
+ *   segmentos vivos   uno encendido por recuerdo consultado
+ *   anillo de escucha pulsa solo con el micrófono abierto
+ *   núcleo            rojo si hay salida a Internet permitida
  */
+
+const C = 200; // centro
+const TAU = Math.PI * 2;
+
+/** Punto en la circunferencia, en grados desde arriba. */
+function at(radius: number, deg: number): [number, number] {
+  const rad = ((deg - 90) * Math.PI) / 180;
+  return [C + radius * Math.cos(rad), C + radius * Math.sin(rad)];
+}
+
+/** Arco como comando de path SVG. */
+function arcPath(radius: number, from: number, to: number): string {
+  const [x1, y1] = at(radius, from);
+  const [x2, y2] = at(radius, to);
+  const large = Math.abs(to - from) > 180 ? 1 : 0;
+  return `M ${x1} ${y1} A ${radius} ${radius} 0 ${large} 1 ${x2} ${y2}`;
+}
+
 export function Sigil({
   health,
   busy,
@@ -32,112 +51,171 @@ export function Sigil({
   recalled?: number;
   compact?: boolean;
 }) {
+  const alive = (health?.agents.length ?? 0) > 0;
   const total = health?.agents.length ?? 0;
   const up = health?.agents.filter((a) => a.status === "ok").length ?? 0;
   const ratio = total > 0 ? up / total : 0;
 
-  const R_AGENTS = 148;
-  const circumference = 2 * Math.PI * R_AGENTS;
-  const arc = circumference * ratio;
+  const R_AGENTS = 176;
+  const circ = TAU * R_AGENTS;
 
-  // Una marca por recuerdo consultado, repartidas por el anillo exterior.
-  const ticks = Math.min(recalled, 12);
+  const SEGMENTS = 24;
+  const litSegments = Math.min(recalled, SEGMENTS);
 
   return (
-    <div className="sigil" data-compact={compact || undefined} data-busy={busy || undefined}>
-      <svg viewBox="0 0 360 360" role="img" aria-label="Estado de KAIROS">
+    <div
+      className="sigil"
+      data-compact={compact || undefined}
+      data-busy={busy || undefined}
+      data-alive={alive || undefined}
+    >
+      <svg viewBox="0 0 400 400" role="img" aria-label="Estado de KAIROS">
         <defs>
-          <radialGradient id="k-core">
-            <stop offset="0%" stopColor="var(--brass)" stopOpacity="0.42" />
-            <stop offset="55%" stopColor="var(--brass)" stopOpacity="0.07" />
-            <stop offset="100%" stopColor="var(--brass)" stopOpacity="0" />
+          <radialGradient id="k-bloom">
+            <stop offset="0%" stopColor="var(--ice)" stopOpacity="0.16" />
+            <stop offset="60%" stopColor="var(--ice)" stopOpacity="0.05" />
+            <stop offset="100%" stopColor="var(--ice)" stopOpacity="0" />
           </radialGradient>
-          <linearGradient id="k-sweep" x1="0" y1="0" x2="1" y2="0">
+          <linearGradient id="k-sweep" x1="0" y1="0" x2="1" y2="1">
             <stop offset="0%" stopColor="var(--ice)" stopOpacity="0" />
-            <stop offset="100%" stopColor="var(--ice)" stopOpacity="0.9" />
+            <stop offset="60%" stopColor="var(--ice)" stopOpacity="0.35" />
+            <stop offset="100%" stopColor="var(--ice)" stopOpacity="1" />
           </linearGradient>
         </defs>
 
-        <circle cx="180" cy="180" r="140" fill="url(#k-core)" />
+        <circle cx={C} cy={C} r="180" fill="url(#k-bloom)" />
 
-        {/* Marcas de memoria consultada */}
-        <g className="ticks">
-          {Array.from({ length: ticks }, (_, i) => (
-            <line
-              key={i}
-              x1="180" y1="14" x2="180" y2="26"
-              stroke="var(--ice)" strokeWidth="2" opacity="0.85"
-              transform={`rotate(${(360 / 12) * i} 180 180)`}
-            />
-          ))}
+        {/* Corona de bloques: gira muy despacio mientras hay nucleo */}
+        <g className="idle-slow" opacity="0.5">
+          {Array.from({ length: 36 }, (_, i) => {
+            const [x, y] = at(198, i * 10);
+            const wide = i % 3 === 0;
+            return (
+              <rect key={i} x={x - (wide ? 3 : 1.5)} y={y - 4}
+                width={wide ? 6 : 3} height={wide ? 9 : 5}
+                fill={i % 6 === 0 ? "var(--brass)" : "var(--ice)"}
+                transform={`rotate(${i * 10} ${x} ${y})`} />
+            );
+          })}
         </g>
 
-        {/* Agentes vivos */}
-        <circle cx="180" cy="180" r={R_AGENTS} fill="none" stroke="var(--rule-bright)" strokeWidth="1" />
-        <circle
-          className="ring-agents"
-          cx="180" cy="180" r={R_AGENTS}
-          fill="none" stroke="var(--ice)" strokeWidth="2.5"
-          strokeDasharray={`${arc} ${circumference}`}
-          transform="rotate(-90 180 180)"
-        />
+        {/* ---- estructura exterior: grabado fijo ---- */}
+        <circle cx={C} cy={C} r="192" fill="none" stroke="var(--rule-bright)" strokeWidth="1" opacity="0.5" />
+        <circle cx={C} cy={C} r="186" fill="none" stroke="var(--ice-dim)" strokeWidth="0.75"
+          strokeDasharray="1 7" opacity="0.85" />
 
-        {/* Barrido: solo mientras genera */}
+        {/* Corchetes de cuadrante: giran al reves, aun mas despacio */}
+        <g className="idle-slower">
+        {[35, 125, 215, 305].map((deg) => (
+          <path key={`b${deg}`} d={arcPath(192, deg, deg + 20)}
+            fill="none" stroke="var(--ice)" strokeWidth="3" strokeLinecap="round" opacity="0.8" />
+        ))}
+        </g>
+
+        {/* ---- agentes vivos ---- */}
+        <circle cx={C} cy={C} r={R_AGENTS} fill="none" stroke="var(--rule-bright)" strokeWidth="1" />
+        <circle className="ring-agents" cx={C} cy={C} r={R_AGENTS}
+          fill="none" stroke="var(--ice)" strokeWidth="3"
+          strokeDasharray={`${circ * ratio} ${circ}`} transform={`rotate(-90 ${C} ${C})`} />
+
+        {/* ---- segmentos de memoria: uno por recuerdo consultado ---- */}
+        <g className="segments">
+          {Array.from({ length: SEGMENTS }, (_, i) => {
+            const step = 360 / SEGMENTS;
+            const lit = i < litSegments;
+            return (
+              <path key={i} d={arcPath(163, i * step + 2, i * step + step - 4)}
+                fill="none" strokeWidth="7" strokeLinecap="butt"
+                stroke={lit ? "var(--ice)" : "var(--rule-bright)"}
+                opacity={lit ? 0.95 : 0.32}
+                data-lit={lit || undefined} />
+            );
+          })}
+        </g>
+
+        {/* ---- barrido: solo mientras genera ---- */}
         <g className="ring-sweep" data-live={busy || undefined}>
-          <circle
-            cx="180" cy="180" r="126"
-            fill="none" stroke="url(#k-sweep)" strokeWidth="3"
-            strokeDasharray="180 612" strokeLinecap="round"
-          />
+          <circle cx={C} cy={C} r="146" fill="none" stroke="url(#k-sweep)"
+            strokeWidth="4" strokeDasharray="230 688" strokeLinecap="round" />
         </g>
 
-        {/* Anillo de datos y contra-anillo */}
+        {/* ---- anillo grabado con marcas finas ---- */}
+        <circle cx={C} cy={C} r="134" fill="none" stroke="var(--ice-dim)" strokeWidth="1" opacity="0.7" />
+        <g className="idle-drift" opacity="0.55">
+          {Array.from({ length: 60 }, (_, i) => {
+            const [x1, y1] = at(134, i * 6);
+            const [x2, y2] = at(i % 5 === 0 ? 124 : 129, i * 6);
+            return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2}
+              stroke="var(--ice)" strokeWidth={i % 5 === 0 ? 1.4 : 0.7} />;
+          })}
+        </g>
+
+        {/* ---- anillo de datos: gira al generar ---- */}
         <g className="ring-data" data-live={busy || undefined}>
-          <circle
-            cx="180" cy="180" r="112"
-            fill="none" stroke="var(--brass)" strokeWidth="1.5"
-            strokeDasharray="34 18" opacity="0.8"
-          />
-        </g>
-        <g className="ring-counter" data-live={busy || undefined}>
-          <circle
-            cx="180" cy="180" r="98"
-            fill="none" stroke="var(--brass-dim)" strokeWidth="1"
-            strokeDasharray="5 27"
-          />
+          <circle cx={C} cy={C} r="112" fill="none" stroke="var(--brass)"
+            strokeWidth="2" strokeDasharray="40 22" opacity="0.85" />
+          {[0, 90, 180, 270].map((deg) => {
+            const [x, y] = at(112, deg);
+            return <rect key={deg} x={x - 4} y={y - 4} width="8" height="8"
+              fill="var(--brass)" opacity="0.9" transform={`rotate(${deg} ${x} ${y})`} />;
+          })}
         </g>
 
-        {/* Estructura fija: da sensación de instrumento calibrado */}
-        {[0, 45, 90, 135, 180, 225, 270, 315].map((deg) => (
-          <line
-            key={deg}
-            x1="180" y1="40" x2="180" y2="54"
-            stroke="var(--brass)" strokeWidth={deg % 90 === 0 ? 2 : 1}
-            opacity={deg % 90 === 0 ? 0.85 : 0.4}
-            transform={`rotate(${deg} 180 180)`}
-          />
+        {/* ---- contra-anillo ---- */}
+        <g className="ring-counter" data-live={busy || undefined}>
+          <circle cx={C} cy={C} r="98" fill="none" stroke="var(--ice)"
+            strokeWidth="1" strokeDasharray="3 15" opacity="0.7" />
+        </g>
+
+        {/* ---- estructura interior fija ---- */}
+        <circle cx={C} cy={C} r="86" fill="none" stroke="var(--rule-bright)" strokeWidth="1" />
+        <g className="idle-inner">
+        {[20, 200].map((deg) => (
+          <path key={`i${deg}`} d={arcPath(86, deg, deg + 55)}
+            fill="none" stroke="var(--ice)" strokeWidth="2.5" opacity="0.75" strokeLinecap="round" />
+        ))}
+        </g>
+
+        {/* ---- escucha ---- */}
+        <circle className="ring-listen" cx={C} cy={C} r="72" fill="none"
+          stroke={listening ? "var(--ember)" : "var(--ice-dim)"} strokeWidth="1.5"
+          data-live={listening || undefined} />
+
+        {/* ---- anillo violeta intermedio: estructura ---- */}
+        <circle cx={C} cy={C} r="80" fill="none" stroke="var(--brass-dim)"
+          strokeWidth="1" strokeDasharray="2 6" opacity="0.8" />
+
+        {/* ---- disco central con halo ---- */}
+        <circle className="core-halo" cx={C} cy={C} r="66" fill="none"
+          stroke="var(--ice)" strokeWidth="1.5" opacity="0.7" />
+        <circle cx={C} cy={C} r="64" fill="var(--void)" opacity="0.78" />
+        <circle cx={C} cy={C} r="64" fill="none" stroke="var(--ice-dim)" strokeWidth="1" />
+        {[8, 188].map((deg) => (
+          <path key={`c${deg}`} d={arcPath(58, deg, deg + 40)}
+            fill="none" stroke="var(--brass)" strokeWidth="2" opacity="0.85" strokeLinecap="round" />
         ))}
 
-        <circle cx="180" cy="180" r="84" fill="none" stroke="var(--rule-bright)" strokeWidth="1" opacity="0.7" />
-
-        {/* Escucha */}
-        <circle
-          className="ring-listen"
-          cx="180" cy="180" r="70"
-          fill="none"
-          stroke={listening ? "var(--ember)" : "var(--rule-bright)"}
-          strokeWidth="1.5"
-          data-live={listening || undefined}
-        />
+        {!compact && (
+          <text
+            x={C} y={C + 5}
+            className="sigil-text"
+            textAnchor="middle"
+            textLength="98"
+            lengthAdjust="spacingAndGlyphs"
+          >
+            K.A.I.R.O.S
+          </text>
+        )}
 
         {/* Núcleo: estado de la salida de datos */}
-        <circle cx="180" cy="180" r="7" className="core-dot"
-          fill={health?.egress_allowed ? "var(--ember)" : "var(--brass)"} />
+        {compact && (
+          <circle cx={C} cy={C} r="18" className="core-dot"
+            fill={health?.egress_allowed ? "var(--ember)" : "var(--ice)"} />
+        )}
       </svg>
 
       {!compact && (
         <div className="sigil-mark">
-          <span>K.A.I.R.O.S</span>
           <small>
             {busy
               ? "procesando"

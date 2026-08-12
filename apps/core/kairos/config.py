@@ -43,6 +43,16 @@ class Settings(BaseSettings):
     voice_timeout_seconds: int = Field(180, alias="KAIROS_VOICE_TIMEOUT_SECONDS")
 
     allow_egress: bool = Field(False, alias="KAIROS_ALLOW_EGRESS")
+    # local  = solo Ollama, pase lo que pase
+    # cloud  = remoto con caida a Ollama si falla
+    # auto   = cloud si hay clave y egress; si no, local
+    provider_mode: str = Field("auto", alias="KAIROS_PROVIDER_MODE")
+    cloud_model: str = Field("claude-sonnet-4-6", alias="KAIROS_CLOUD_MODEL")
+    cloud_max_tokens: int = Field(4096, alias="KAIROS_CLOUD_MAX_TOKENS")
+    search_enabled: bool = Field(True, alias="KAIROS_SEARCH_ENABLED")
+    search_results: int = Field(5, alias="KAIROS_SEARCH_RESULTS")
+    search_region: str = Field("es-es", alias="KAIROS_SEARCH_REGION")
+    timezone: str = Field("Europe/Madrid", alias="KAIROS_TIMEZONE")
     anthropic_api_key: str | None = Field(None, alias="ANTHROPIC_API_KEY")
     openai_api_key: str | None = Field(None, alias="OPENAI_API_KEY")
 

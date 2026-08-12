@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from kairos.agents.base import AgentRequest, StreamEvent, TraceEvent
 from kairos.agents.registry import AgentRegistry
+from kairos.agents.search.agent import probably_needs_search
 from kairos.audit import service as audit
 from kairos.db.models import Conversation, Message, User
 
@@ -88,6 +89,9 @@ class KairosCore:
         trace += retrieval.trace
         memories = retrieval.data.get("hits", []) if retrieval.ok else []
 
+        sources, search_trace = await self._search_if_needed(db, user, message, correlation_id)
+        trace += search_trace
+
         reasoning = self._registry.find("reasoning.respond")
         answer = await reasoning.handle(
             AgentRequest(
@@ -99,6 +103,7 @@ class KairosCore:
                     "owner": user.username,
                     "memories": memories,
                     "history": history,
+                    "sources": sources,
                 },
             )
         )
@@ -199,6 +204,11 @@ class KairosCore:
             data={"memories": memories, "conversation_id": str(conversation.id)},
         )
 
+        sources, search_trace = await self._search_if_needed(db, user, message, correlation_id)
+        trace += search_trace
+        for event in search_trace:
+            yield StreamEvent(type="trace", trace=event)
+
         reasoning = self._registry.find("reasoning.respond_stream")
         parts: list[str] = []
         meta: dict[str, Any] = {}
@@ -213,6 +223,7 @@ class KairosCore:
                     "owner": user.username,
                     "memories": memories,
                     "history": history,
+                    "sources": sources,
                 },
             )
         ):
@@ -347,6 +358,46 @@ class KairosCore:
             )
         )
         await db.commit()
+
+
+    async def _search_if_needed(
+        self, db: AsyncSession, user: User, message: str, correlation_id: uuid.UUID
+    ) -> tuple[list[dict[str, Any]], list[TraceEvent]]:
+        """Busca en la web si la pregunta huele a "algo de hoy".
+
+        Se decide ANTES de generar, con una heuristica barata. Buscar de mas
+        cuesta un segundo; no buscar cuando hacia falta produce una respuesta
+        inventada, que es mucho peor.
+        """
+        try:
+            agent = self._registry.find("search.web")
+        except KeyError:
+            return [], []
+        if not probably_needs_search(message):
+            return [], []
+
+        result = await agent.handle(
+            AgentRequest(
+                capability="search.web",
+                actor_id=user.id,
+                correlation_id=correlation_id,
+                payload={"query": message},
+            )
+        )
+        if not result.ok:
+            return [], []
+
+        sources = result.data.get("results", [])
+        if sources:
+            await audit.record(
+                db,
+                action="search.web",
+                outcome="success",
+                actor_id=user.id,
+                correlation_id=correlation_id,
+                detail={"consulta": message[:120], "resultados": len(sources)},
+            )
+        return sources, result.trace
 
     async def _get_or_create_conversation(
         self,

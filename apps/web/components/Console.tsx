@@ -231,6 +231,8 @@ export function Console({ username, onSignOut }: { username: string; onSignOut: 
                 setVoiceOn(next);
                 if (!next) speechRef.current?.stop();
               }}
+              onInterrupt={halt}
+              onHush={() => speechRef.current?.stop()}
               onUtterance={(text) => send(text, true)}
               onSay={say}
             />
