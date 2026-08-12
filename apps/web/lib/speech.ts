@@ -14,8 +14,47 @@
  * cola es estrictamente secuencial.
  */
 
+
+/**
+ * FastAPI devuelve `detail` como texto en los errores propios, pero como
+ * ARRAY de objetos en los de validación. Meter ese array en `new Error()`
+ * producía el "[object Object]" que aparecía en pantalla.
+ */
+function detailToText(detail: unknown): string {
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    const first = detail[0] as { msg?: string } | undefined;
+    return first?.msg ?? "El servicio de voz rechazó el texto";
+  }
+  return "No se pudo sintetizar";
+}
+
+function describe(err: unknown): string {
+  return err instanceof Error ? err.message : "Fallo al hablar";
+}
+
 const SENTENCE_END = /([.!?…]+|\n)/;
 const MIN_CHARS = 12;
+
+
+const MAX_SPOKEN = 400;
+
+/** Trocea un fragmento demasiado largo por comas, sin partir palabras. */
+function split(text: string): string[] {
+  if (text.length <= MAX_SPOKEN) return [text];
+  const out: string[] = [];
+  let current = "";
+  for (const part of text.split(/(?<=,)\s*/)) {
+    if ((current + part).length > MAX_SPOKEN && current) {
+      out.push(current.trim());
+      current = part;
+    } else {
+      current += part;
+    }
+  }
+  if (current.trim()) out.push(current.trim());
+  return out;
+}
 
 export class SpeechQueue {
   private pending: string[] = [];
@@ -42,7 +81,10 @@ export class SpeechQueue {
       // una petición de síntesis por monosílabo satura el servicio.
       if (sentence.length >= MIN_CHARS) {
         this.buffer = rest;
-        this.pending.push(sentence);
+        // Una "frase" sin puntuación puede ser un párrafo entero. Se trocea
+        // por comas para que la síntesis no se atragante ni tarde una
+        // eternidad en devolver el primer audio.
+        for (const piece of split(sentence)) this.pending.push(piece);
         void this.drain();
       } else {
         break;
@@ -92,16 +134,17 @@ export class SpeechQueue {
           body: JSON.stringify({ text: sentence }),
         });
         if (!response.ok) {
-          const body = (await response.json().catch(() => null)) as { detail?: string } | null;
-          throw new Error(body?.detail ?? "No se pudo sintetizar");
+          const body = (await response.json().catch(() => null)) as { detail?: unknown } | null;
+          throw new Error(detailToText(body?.detail));
         }
         if (this.stopped) break;
         const url = URL.createObjectURL(await response.blob());
         this.urls.push(url);
         await this.play(url);
       } catch (err) {
-        this.onFault?.(err instanceof Error ? err.message : "Fallo al hablar");
-        break;
+        // Un fallo en UNA frase no debe callar el resto de la respuesta.
+        // Antes se hacia `break` y KAIROS enmudecia a mitad de frase.
+        this.onFault?.(describe(err));
       }
     }
 

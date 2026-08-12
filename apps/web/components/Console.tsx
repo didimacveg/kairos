@@ -11,6 +11,7 @@ import {
 } from "@/lib/api";
 import { SpeechQueue } from "@/lib/speech";
 import { Instruments, type TurnSummary } from "./Instruments";
+import { Sigil } from "./Sigil";
 import { StatusStrip } from "./StatusStrip";
 import { VoiceSession } from "./VoiceSession";
 
@@ -151,11 +152,11 @@ export function Console({ username, onSignOut }: { username: string; onSignOut: 
         <div className="channel">
           <div className="log">
             {entries.length === 0 && (
-              <div className="standby">
-                <h1>Todo ocurre en esta máquina.</h1>
-                <p>
-                  Escribe, o enciende la sesión de voz y habla. KAIROS consulta su memoria
-                  antes de responder y te enseña a la derecha exactamente qué usó.
+              <div className="core-stage">
+                <Sigil health={health} busy={streaming} listening={voiceOn} />
+                <p className="hint">
+                  Escribe, o enciende la sesión de voz y habla. Todo el procesamiento
+                  ocurre en esta máquina.
                 </p>
               </div>
             )}

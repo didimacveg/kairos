@@ -1,6 +1,7 @@
 "use client";
 
 import type { Health } from "@/lib/api";
+import { Sigil } from "./Sigil";
 
 /**
  * Tira de telemetría — el elemento firma de la interfaz.
@@ -40,8 +41,8 @@ export function StatusStrip({
   return (
     <header className="strip">
       <div className="wordmark">
-        <span className="iris" data-live={busy || undefined} aria-hidden="true" />
-        KAIROS
+        <Sigil health={health} busy={busy} listening={listening} compact />
+        K.A.I.R.O.S
       </div>
 
       <dl className="gauges">

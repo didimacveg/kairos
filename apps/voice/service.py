@@ -1,16 +1,14 @@
 """Servicio de voz de KAIROS — transcripcion (Whisper) y sintesis (Piper).
 
-Ambos motores viven aqui, en su propio contenedor, fuera del nucleo. Whisper
-corre en CPU deliberadamente: transcribir es una rafaga, razonar es el bucle
-principal, y la VRAM se reserva para el modelo que razona.
-
-Piper tambien es CPU. Sintetiza mas rapido que tiempo real en un Ryzen 5800X,
-asi que no compite por GPU con nada.
+Ambos motores viven aqui, fuera del nucleo, y ambos corren en CPU: transcribir
+y hablar son rafagas, razonar es el bucle principal. La VRAM se reserva entera
+para el modelo que razona.
 """
 from __future__ import annotations
 
 import io
 import os
+import re
 import tempfile
 import time
 import wave
@@ -29,13 +27,20 @@ COMPUTE_TYPE = os.getenv("KAIROS_WHISPER_COMPUTE", "int8")
 LANGUAGE = os.getenv("KAIROS_WHISPER_LANGUAGE", "es")
 MAX_AUDIO_BYTES = int(os.getenv("KAIROS_MAX_AUDIO_BYTES", str(25 * 1024 * 1024)))
 
-PIPER_VOICE = os.getenv("KAIROS_PIPER_VOICE", "es_ES-davefx-medium")
+PIPER_VOICE = os.getenv("KAIROS_PIPER_VOICE", "es_ES-sharvard-medium")
 PIPER_DIR = Path(os.getenv("KAIROS_PIPER_DIR", "/var/lib/kairos/voices"))
-MAX_SPEECH_CHARS = 1200
+# length_scale > 1 = habla mas despacio. Una diccion algo mas lenta se lee
+# como deliberada; acelerada suena a ardilla.
+PIPER_LENGTH = float(os.getenv("KAIROS_PIPER_LENGTH_SCALE", "1.08"))
+# Grave el resultado bajando la frecuencia de reproduccion del WAV: el truco
+# del vinilo a menos revoluciones. Baja el tono Y alarga el audio, asi que se
+# compensa generando mas rapido con length_scale. Crudo, pero no necesita
+# librerias de procesado de senal ni GPU.
+PIPER_PITCH = float(os.getenv("KAIROS_PIPER_PITCH", "0.90"))
+MAX_SPEECH_CHARS = 2000
 
-# Umbral de confianza. faster-whisper devuelve avg_logprob por segmento:
-# cuanto mas negativo, menos seguro esta el modelo de lo que ha oido.
-# -0.9 marca la frontera practica entre "entendio" y "adivino".
+# faster-whisper devuelve avg_logprob por segmento: cuanto mas negativo, menos
+# seguro esta de lo que ha oido. -0.9 marca la frontera entre entender y adivinar.
 LOW_CONFIDENCE = float(os.getenv("KAIROS_WHISPER_MIN_LOGPROB", "-0.9"))
 
 _whisper: Any = None
@@ -55,7 +60,9 @@ class Transcription(BaseModel):
 
 
 class SpeechRequest(BaseModel):
-    text: str = Field(min_length=1, max_length=MAX_SPEECH_CHARS)
+    # Sin restricciones de longitud en el esquema: una frase vacia o larga debe
+    # producir una respuesta manejable, no un 422 que el cliente no interpreta.
+    text: str = ""
 
 
 def _load_whisper() -> Any:
@@ -68,8 +75,8 @@ def _load_whisper() -> Any:
 
 
 def _load_piper() -> Any:
-    """Carga la voz de Piper. Si falta el modelo, el servicio sigue vivo:
-    KAIROS puede escuchar aunque no pueda hablar."""
+    """Si falta el modelo, el servicio sigue vivo: KAIROS puede escuchar
+    aunque no pueda hablar."""
     try:
         from piper import PiperVoice
 
@@ -91,7 +98,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     _piper = None
 
 
-app = FastAPI(title="KAIROS Voice", version="0.2.0", lifespan=lifespan)
+app = FastAPI(title="KAIROS Voice", version="0.3.0", lifespan=lifespan)
 
 
 @app.get("/health")
@@ -103,6 +110,8 @@ async def health() -> dict[str, Any]:
         "compute_type": COMPUTE_TYPE,
         "speech": "ok" if _piper is not None else "unavailable",
         "voice": PIPER_VOICE,
+        "pitch": PIPER_PITCH,
+        "length_scale": PIPER_LENGTH,
     }
 
 
@@ -156,14 +165,58 @@ async def transcribe(audio: UploadFile = File(...)) -> Transcription:
     )
 
 
+def _synthesize(text: str, wav: Any) -> None:
+    """Sintetiza en un WAV abierto, sea cual sea la version de piper-tts.
+
+    La API cambio entre versiones: unas fijan los parametros del WAV, otras
+    esperan que lo haga el llamante, y las mas nuevas devuelven trozos en vez
+    de escribir. Se prueban las tres en orden en lugar de fijar una version en
+    requirements: el servicio debe sobrevivir a que la dependencia se actualice.
+    """
+    rate = int(getattr(getattr(_piper, "config", None), "sample_rate", 22050))
+    playback = max(8000, int(rate * PIPER_PITCH))
+
+    if hasattr(_piper, "synthesize_wav"):
+        _piper.synthesize_wav(text, wav)
+        return
+
+    wav.setnchannels(1)
+    wav.setsampwidth(2)
+    wav.setframerate(playback)
+
+    try:
+        result = _piper.synthesize(text, wav, length_scale=PIPER_LENGTH)
+    except TypeError:
+        result = _piper.synthesize(text, wav)
+
+    if result is not None:
+        for chunk in result:
+            data = getattr(chunk, "audio_int16_bytes", None)
+            if data is None:
+                data = bytes(chunk)
+            wav.writeframes(data)
+
+
+def _clean(text: str) -> str:
+    """Quita el marcado que el modelo escribe y que Piper leeria en alto.
+
+    Sin esto, KAIROS pronuncia "asterisco asterisco No mirar al sol asterisco
+    asterisco". El texto en pantalla conserva su formato; solo se limpia lo
+    que se manda a la voz.
+    """
+    cleaned = re.sub(r"[*_`#]+", " ", text)
+    cleaned = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned)
+    return cleaned.strip()
+
+
 @app.post("/speak")
 async def speak(body: SpeechRequest) -> Response:
     """Sintetiza una frase y devuelve WAV.
 
     Se sintetiza por frases, no por respuesta entera: el cliente pide cada
     frase en cuanto el modelo la termina, asi KAIROS empieza a hablar mientras
-    todavia esta pensando el resto. Sin eso, cada respuesta hablada arrancaria
-    con varios segundos de silencio.
+    todavia esta pensando el resto.
     """
     if _piper is None:
         raise HTTPException(
@@ -171,10 +224,21 @@ async def speak(body: SpeechRequest) -> Response:
             f"Voz no disponible: falta el modelo {PIPER_VOICE} en {PIPER_DIR}",
         )
 
+    text = _clean(body.text)[:MAX_SPEECH_CHARS]
+    if not text:
+        # Nada que decir no es un error: WAV vacio y el cliente sigue con la
+        # frase siguiente sin romper la cola de reproduccion.
+        empty = io.BytesIO()
+        with wave.open(empty, "wb") as wav:
+            wav.setnchannels(1)
+            wav.setsampwidth(2)
+            wav.setframerate(22050)
+        return Response(content=empty.getvalue(), media_type="audio/wav")
+
     buffer = io.BytesIO()
     try:
         with wave.open(buffer, "wb") as wav:
-            _piper.synthesize(body.text, wav)
+            _synthesize(text, wav)
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY, f"No se pudo sintetizar: {exc}"

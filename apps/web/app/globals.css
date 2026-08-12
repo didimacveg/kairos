@@ -683,3 +683,115 @@ button:disabled { opacity: 0.35; cursor: not-allowed; }
   }
   .cursor { visibility: visible; }
 }
+
+/* ==========================================================================
+   SIGILO K.A.I.R.O.S
+   Cada anillo codifica un estado real. Nada gira porque sí: si la máquina
+   está parada, el sigilo está quieto.
+   ========================================================================== */
+
+.sigil {
+  display: grid;
+  place-items: center;
+  gap: 1.1rem;
+  padding: 1rem 0 2rem;
+  transition: transform 0.5s ease, opacity 0.4s ease;
+}
+
+.sigil svg {
+  width: min(58vh, 20rem);
+  height: auto;
+  overflow: visible;
+  filter: drop-shadow(0 0 26px rgba(255, 182, 39, 0.16));
+}
+
+.sigil-mark {
+  text-align: center;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.sigil-mark span {
+  font-family: var(--ui);
+  font-size: 1.6rem;
+  font-weight: 300;
+  letter-spacing: 0.42em;
+  text-indent: 0.42em;
+  color: var(--bone);
+  text-shadow: 0 0 26px var(--brass-glow);
+}
+
+.sigil-mark small {
+  font-family: var(--data);
+  font-size: 0.5625rem;
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.sigil[data-busy] .sigil-mark small { color: var(--brass); }
+
+/* --- anillos --- */
+
+.ring-agents {
+  transition: stroke-dasharray 0.6s ease;
+  filter: drop-shadow(0 0 6px var(--ice-glow));
+}
+
+.ring-think { transform-origin: 120px 120px; }
+
+.ring-think[data-live] {
+  animation: sigil-spin 7s linear infinite;
+  filter: drop-shadow(0 0 8px var(--brass-glow));
+}
+
+.ring-think[data-live] circle:last-child {
+  animation: sigil-spin-back 4s linear infinite;
+  transform-origin: 120px 120px;
+}
+
+.ring-listen[data-live] {
+  animation: sigil-pulse 1.6s ease-in-out infinite;
+  filter: drop-shadow(0 0 8px var(--ember-glow));
+}
+
+.core-dot { filter: drop-shadow(0 0 10px var(--brass-glow)); }
+
+@keyframes sigil-spin { to { transform: rotate(360deg); } }
+@keyframes sigil-spin-back { to { transform: rotate(-360deg); } }
+@keyframes sigil-pulse {
+  50% { opacity: 0.35; r: 52; }
+}
+
+/* --- se retira a la cabecera cuando empieza la conversación --- */
+
+.sigil[data-compact] { padding: 0; gap: 0.55rem; }
+
+.sigil[data-compact] svg {
+  width: 2.1rem;
+  filter: none;
+}
+
+.sigil[data-compact] .sigil-mark { display: none; }
+
+/* El sigilo en el centro necesita su propio contenedor centrado */
+.core-stage {
+  display: grid;
+  place-items: center;
+  min-height: 100%;
+  padding: 1rem;
+}
+
+.core-stage .hint {
+  max-width: 30rem;
+  text-align: center;
+  color: var(--dim);
+  font-size: var(--t-small);
+  margin: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ring-think[data-live],
+  .ring-think[data-live] circle:last-child,
+  .ring-listen[data-live] { animation: none; }
+}

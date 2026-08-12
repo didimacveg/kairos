@@ -21,12 +21,17 @@ RUN groupadd --gid 10002 kairos && \
 
 # Voz espanola de Piper. Se descarga en build para que el contenedor arranque
 # sin red: KAIROS debe hablar con el router desenchufado.
-ARG PIPER_VOICE=es_ES-davefx-medium
-ARG PIPER_BASE=https://huggingface.co/rhasspy/piper-voices/resolve/main/es/es_ES/davefx/medium
-RUN curl -fsSL "${PIPER_BASE}/${PIPER_VOICE}.onnx" \
-        -o "/var/lib/kairos/voices/${PIPER_VOICE}.onnx" && \
-    curl -fsSL "${PIPER_BASE}/${PIPER_VOICE}.onnx.json" \
-        -o "/var/lib/kairos/voices/${PIPER_VOICE}.onnx.json"
+# Voces espanolas de Piper. Se descargan en build para que el contenedor
+# arranque sin red: KAIROS debe hablar con el router desenchufado.
+#   sharvard  masculina, timbre mas grave y sobrio  (por defecto)
+#   davefx    masculina, mas clara y neutra
+ARG PIPER_BASE=https://huggingface.co/rhasspy/piper-voices/resolve/main/es/es_ES
+RUN set -e; \
+    for v in "sharvard/medium/es_ES-sharvard-medium" "davefx/medium/es_ES-davefx-medium"; do \
+        name=$(basename "$v"); \
+        curl -fsSL "${PIPER_BASE}/${v}.onnx" -o "/var/lib/kairos/voices/${name}.onnx"; \
+        curl -fsSL "${PIPER_BASE}/${v}.onnx.json" -o "/var/lib/kairos/voices/${name}.onnx.json"; \
+    done
 
 RUN chown -R kairos:kairos /var/lib/kairos
 
