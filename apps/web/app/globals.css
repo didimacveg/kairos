@@ -1100,3 +1100,39 @@ body::before {
 @media (prefers-reduced-motion: reduce) {
   .sigil * { animation: none !important; }
 }
+
+/* ==========================================================================
+   FASE 3C — velocidades de reposo perceptibles
+   Corrección: la primera versión giraba a 150-320 s por vuelta, entre 1 y 2
+   grados por segundo. Técnicamente se movía; para el ojo estaba parada.
+   El rango util para "vivo pero no molesto" esta entre 25 y 90 s.
+   ========================================================================== */
+
+.sigil[data-alive] .idle-slow    { animation: idle-cw  46s linear infinite; }
+.sigil[data-alive] .idle-slower  { animation: idle-ccw 68s linear infinite; }
+.sigil[data-alive] .idle-drift   { animation: idle-cw  92s linear infinite; }
+.sigil[data-alive] .idle-inner   { animation: idle-ccw 27s linear infinite; }
+
+/* Al generar, el sistema se acelera de forma inconfundible. */
+.sigil[data-busy][data-alive] .idle-slow   { animation-duration: 9s; }
+.sigil[data-busy][data-alive] .idle-slower { animation-duration: 13s; }
+.sigil[data-busy][data-alive] .idle-drift  { animation-duration: 18s; }
+.sigil[data-busy][data-alive] .idle-inner  { animation-duration: 5s; }
+
+/* Respiración más marcada: es el pulso, tiene que verse. */
+.sigil[data-alive] .ring-agents { animation: agents-breathe 4.2s ease-in-out infinite; }
+.sigil[data-alive] .segments    { animation: segments-breathe 5.5s ease-in-out infinite; }
+.sigil[data-alive] .core-halo   { animation: halo-breathe 3.4s ease-in-out infinite; }
+
+@keyframes agents-breathe   { 50% { opacity: 0.42; } }
+@keyframes segments-breathe { 50% { opacity: 0.55; } }
+@keyframes halo-breathe     { 50% { opacity: 0.22; transform: scale(1.035); } }
+
+.sigil[data-busy] .core-halo { animation-duration: 1.1s; }
+
+/* Núcleo caído: todo quieto. Sigue siendo información, no un fallo de estilo. */
+.sigil:not([data-alive]) * { animation: none !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  .sigil * { animation: none !important; }
+}
