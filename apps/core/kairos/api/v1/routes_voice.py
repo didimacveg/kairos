@@ -3,7 +3,8 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile, status
-from pydantic import BaseModel
+from fastapi.responses import Response
+from pydantic import BaseModel, Field
 
 from kairos.agents.base import AgentRequest
 from kairos.audit import service as audit
@@ -19,6 +20,13 @@ class TranscriptionOut(BaseModel):
     language: str
     duration_s: float
     model: str
+    confidence: float
+    low_confidence: bool
+    no_speech: bool
+
+
+class SpeakIn(BaseModel):
+    text: str = Field(min_length=1, max_length=1200)
 
 
 @router.post("/transcribe", response_model=TranscriptionOut)
@@ -28,12 +36,12 @@ async def transcribe(
     db: DbSession,
     audio: Annotated[UploadFile, File()],
 ) -> TranscriptionOut:
-    """Transcribe audio. NO envia nada al chat: devuelve el texto.
+    """Transcribe audio y devuelve texto con su confianza.
 
-    Separar transcripcion de envio es deliberado. El usuario debe poder leer
-    y corregir lo que el sistema entendio antes de que se convierta en un
-    mensaje — y en un recuerdo. Un error de transcripcion que entra directo
-    en la memoria es mucho mas caro de deshacer que uno que se ve y se borra.
+    El cliente decide que hacer con `low_confidence`: en sesion manos libres,
+    KAIROS pide que se repita en vez de enviar una frase mal entendida. Un
+    error de transcripcion que llega al chat puede acabar en la memoria
+    permanente, y eso cuesta mucho mas de deshacer que repetir una frase.
     """
     payload = await audio.read()
     if len(payload) > MAX_UPLOAD_BYTES:
@@ -57,18 +65,30 @@ async def transcribe(
         action="voice.transcribe",
         outcome="success" if result.ok else "failure",
         actor_id=user.id,
-        detail=(
-            {k: v for k, v in result.trace[0].detail.items()} if result.ok and result.trace
-            else {"error": result.error}
-        ),
+        detail=dict(result.trace[0].detail) if result.ok and result.trace else {"error": result.error},
     )
 
     if not result.ok:
-        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, result.error or "Fallo al transcribir")
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE, result.error or "Fallo al transcribir"
+        )
 
-    return TranscriptionOut(
-        text=result.data["text"],
-        language=result.data["language"],
-        duration_s=result.data["duration_s"],
-        model=result.data["model"],
+    return TranscriptionOut(**{k: result.data[k] for k in TranscriptionOut.model_fields})
+
+
+@router.post("/speak")
+async def speak(body: SpeakIn, request: Request, user: CurrentUser) -> Response:
+    """Sintetiza una frase. El cliente pide frase a frase mientras genera."""
+    agent = request.app.state.core.registry.find("voice.speak")
+    result = await agent.handle(
+        AgentRequest(capability="voice.speak", actor_id=user.id, payload={"text": body.text})
+    )
+    if not result.ok:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE, result.error or "Fallo al sintetizar"
+        )
+    return Response(
+        content=result.data["audio"],
+        media_type="audio/wav",
+        headers={"Cache-Control": "no-store"},
     )

@@ -18,6 +18,7 @@ export function StatusStrip({
   health,
   username,
   busy,
+  listening,
   lastLatency,
   lastModel,
   recalled,
@@ -26,6 +27,7 @@ export function StatusStrip({
   health: Health | null;
   username: string;
   busy: boolean;
+  listening: boolean;
   lastLatency: number | null;
   lastModel: string | null;
   recalled: number | null;
@@ -71,6 +73,13 @@ export function StatusStrip({
           <dt>Memoria consultada</dt>
           <dd data-tone={recalled === null ? "idle" : undefined}>
             {recalled === null ? "—" : `${recalled} recuerdos`}
+          </dd>
+        </div>
+
+        <div className="gauge">
+          <dt>Micrófono</dt>
+          <dd data-tone={listening ? "alert" : "idle"}>
+            {listening ? "escuchando" : "apagado"}
           </dd>
         </div>
 

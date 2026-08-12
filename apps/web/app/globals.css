@@ -20,22 +20,29 @@
 
 :root {
   /* --- superficie --- */
-  --void: #080c0f;
-  --deck: #0e161b;
-  --panel: #131e24;
-  --rule: #1d2d35;
-  --rule-bright: #2b414c;
+  --void: #05080b;
+  --deck: #0b1319;
+  --panel: #0f1a21;
+  --rule: #16262e;
+  --rule-bright: #233c47;
 
   /* --- tinta --- */
   --bone: #e4eaea;
   --dim: #6a8189;
   --faint: #3f545c;
 
-  /* --- señal --- */
-  --brass: #d9a441;
-  --brass-dim: #6b5322;
-  --ice: #74b8cc;
-  --ember: #d2593f;
+  /* --- señal ---
+     Mas saturada que la version anterior, a peticion expresa. El limite que
+     no se cruza: el brillo marca ACTIVIDAD REAL. Nada resplandece porque si.
+     Un elemento encendido significa que ese subsistema esta trabajando. */
+  --brass: #ffb627;
+  --brass-dim: #7d5a12;
+  --brass-glow: rgba(255, 182, 39, 0.55);
+  --ice: #4ee0ff;
+  --ice-dim: #1a5a68;
+  --ice-glow: rgba(78, 224, 255, 0.5);
+  --ember: #ff4d4d;
+  --ember-glow: rgba(255, 77, 77, 0.45);
 
   /* --- tipografía --- */
   --ui: ui-sans-serif, "Inter", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
@@ -81,8 +88,8 @@ body::before {
   background-image:
     linear-gradient(var(--rule) 1px, transparent 1px),
     linear-gradient(90deg, var(--rule) 1px, transparent 1px);
-  background-size: 64px 64px;
-  opacity: 0.14;
+  background-size: 56px 56px;
+  opacity: 0.2;
   mask-image: radial-gradient(ellipse 120% 80% at 50% 0%, #000 30%, transparent 100%);
 }
 
@@ -100,6 +107,7 @@ body::before {
 }
 
 .wordmark {
+  text-shadow: 0 0 12px var(--brass-glow);
   display: flex;
   align-items: center;
   gap: 0.7rem;
@@ -133,11 +141,12 @@ body::before {
   transition: opacity 0.4s ease;
 }
 
-.iris[data-live]::after { opacity: 0.9; }
+.iris[data-live]::after { opacity: 1; box-shadow: 0 0 10px var(--brass-glow); }
 
 .iris[data-live] {
-  animation: iris-spin 2.6s linear infinite;
+  animation: iris-spin 2.2s linear infinite;
   border-style: dashed;
+  box-shadow: 0 0 14px var(--brass-glow), inset 0 0 8px var(--brass-glow);
 }
 
 @keyframes iris-spin { to { transform: rotate(360deg); } }
@@ -176,7 +185,12 @@ body::before {
   font-size: var(--t-micro);
   color: var(--ice);
   font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 8px var(--ice-glow);
 }
+
+.gauge dd[data-tone="local"] { text-shadow: 0 0 8px var(--brass-glow); }
+.gauge dd[data-tone="alert"] { text-shadow: 0 0 10px var(--ember-glow); }
+.gauge dd[data-tone="idle"] { text-shadow: none; }
 
 .gauge dd[data-tone="local"] { color: var(--brass); }
 .gauge dd[data-tone="alert"] { color: var(--ember); }
@@ -255,7 +269,7 @@ body::before {
   background: var(--faint);
 }
 
-.entry[data-from="kairos"] .from { color: var(--brass); }
+.entry[data-from="kairos"] .from { color: var(--brass); text-shadow: 0 0 8px var(--brass-glow); }
 .entry[data-from="kairos"] .from::before { background: var(--brass); }
 
 .entry .said {
@@ -269,6 +283,7 @@ body::before {
 
 /* Cursor de generacion */
 .cursor {
+  box-shadow: 0 0 12px var(--brass-glow);
   display: inline-block;
   width: 0.5em;
   height: 1.05em;
@@ -304,32 +319,6 @@ body::before {
   font-size: var(--t-body);
 }
 
-.standby ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.standby li {
-  font-family: var(--data);
-  font-size: var(--t-small);
-  color: var(--dim);
-  padding-left: 1.1rem;
-  position: relative;
-  cursor: pointer;
-}
-
-.standby li::before {
-  content: "›";
-  position: absolute;
-  left: 0;
-  color: var(--brass);
-}
-
-.standby li:hover { color: var(--bone); }
 
 /* ==========================================================================
    ENTRADA
@@ -383,7 +372,11 @@ button:hover:not(:disabled) {
   border-color: var(--brass-dim);
 }
 
-button[data-primary] { color: var(--brass); border-color: var(--brass-dim); }
+button[data-primary] {
+  color: var(--brass);
+  border-color: var(--brass-dim);
+  box-shadow: 0 0 0 1px transparent, 0 0 14px -4px var(--brass-glow);
+}
 button[data-primary]:hover:not(:disabled) { background: var(--brass); color: var(--void); }
 button:disabled { opacity: 0.35; cursor: not-allowed; }
 
@@ -411,6 +404,68 @@ button:disabled { opacity: 0.35; cursor: not-allowed; }
   max-width: 15rem;
   line-height: 1.45;
 }
+
+/* --- sesión de voz -------------------------------------------------------
+   El medidor es funcional, no decorativo: sin él no se distingue "el micro
+   no capta" de "no me está entendiendo". Cada barra es una lectura real de
+   RMS del micrófono. */
+
+.voice {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  align-items: stretch;
+  min-width: 8.5rem;
+}
+
+.voice button[data-live] {
+  color: var(--ember);
+  border-color: var(--ember);
+  box-shadow: 0 0 16px -4px var(--ember-glow);
+}
+
+.voice button[data-live]:hover:not(:disabled) {
+  background: var(--ember);
+  color: var(--void);
+}
+
+.vu {
+  display: flex;
+  gap: 2px;
+  height: 12px;
+  align-items: flex-end;
+}
+
+.vu i {
+  flex: 1;
+  height: 40%;
+  background: var(--rule-bright);
+  transition: height 0.06s linear, background 0.06s linear;
+}
+
+.vu i[data-lit] {
+  height: 100%;
+  background: var(--ice);
+  box-shadow: 0 0 6px var(--ice-glow);
+}
+
+.vu i[data-lit][data-hot] {
+  background: var(--ember);
+  box-shadow: 0 0 6px var(--ember-glow);
+}
+
+.voice-state {
+  font-family: var(--data);
+  font-size: 0.5625rem;
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--faint);
+  text-align: center;
+}
+
+.voice-state[data-stage="hearing"] { color: var(--ice); }
+.voice-state[data-stage="listening"] { color: var(--brass); }
+.voice-state[data-stage="working"] { color: var(--dim); }
 
 /* ==========================================================================
    COLUMNA DE INSTRUMENTOS
@@ -466,6 +521,7 @@ button:disabled { opacity: 0.35; cursor: not-allowed; }
   width: 5px;
   height: 5px;
   background: var(--brass);
+  box-shadow: 0 0 8px var(--brass-glow);
 }
 
 .step .op {
@@ -516,6 +572,7 @@ button:disabled { opacity: 0.35; cursor: not-allowed; }
   inset: 0 auto 0 0;
   background: var(--ice);
   display: block;
+  box-shadow: 0 0 8px var(--ice-glow);
 }
 
 .meter .val {
@@ -559,6 +616,7 @@ button:disabled { opacity: 0.35; cursor: not-allowed; }
 }
 
 .airlock .mark {
+  text-shadow: 0 0 22px var(--brass-glow);
   font-size: 1.75rem;
   font-weight: 300;
   letter-spacing: var(--track);

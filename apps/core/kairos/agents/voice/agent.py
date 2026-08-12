@@ -1,13 +1,13 @@
-"""Voice Agent — puente entre el nucleo y el servicio de transcripcion.
+"""Voice Agent — puente entre el nucleo y el servicio de voz.
 
-Capacidad:
-  voice.transcribe   audio (bytes) -> texto
+Capacidades:
+  voice.transcribe   audio -> texto (con confianza)
+  voice.speak        texto -> WAV
 
-Este es el primer agente de KAIROS que NO ejecuta su trabajo en el proceso del
-nucleo: delega en `kairos-voice`, un contenedor aparte con CUDA. Lo importante
-es que el contrato es el mismo que el de Memory o Reasoning. Para el
-orquestador no hay diferencia entre un agente local y uno remoto, que es
-justo lo que se diseño en la Fase 1 pensando en la Fase 3.
+Primer agente de KAIROS que NO ejecuta su trabajo en el proceso del nucleo:
+delega en `kairos-voice`, un contenedor aparte. El contrato es el mismo que el
+de Memory o Reasoning; para el orquestador no hay diferencia entre un agente
+local y uno remoto.
 """
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ from kairos.config import get_settings
 
 class VoiceAgent(Agent):
     name = "voice"
-    capabilities = frozenset({"voice.transcribe"})
+    capabilities = frozenset({"voice.transcribe", "voice.speak"})
 
     def __init__(self, base_url: str | None = None, timeout: int | None = None) -> None:
         settings = get_settings()
@@ -30,9 +30,13 @@ class VoiceAgent(Agent):
         self._timeout = timeout or settings.voice_timeout_seconds
 
     async def handle(self, request: AgentRequest, **context: Any) -> AgentResponse:
-        if request.capability != "voice.transcribe":
-            return AgentResponse.failure(f"Capacidad no soportada: {request.capability}")
+        if request.capability == "voice.transcribe":
+            return await self._transcribe(request)
+        if request.capability == "voice.speak":
+            return await self._speak(request)
+        return AgentResponse.failure(f"Capacidad no soportada: {request.capability}")
 
+    async def _transcribe(self, request: AgentRequest) -> AgentResponse:
         audio: bytes = request.payload.get("audio", b"")
         if not audio:
             return AgentResponse.failure("No se recibio audio")
@@ -56,7 +60,6 @@ class VoiceAgent(Agent):
                 f"No se pudo contactar con el servicio de voz: {type(exc).__name__}"
             )
 
-        elapsed = int((time.perf_counter() - started) * 1000)
         return AgentResponse(
             ok=True,
             data={
@@ -64,21 +67,54 @@ class VoiceAgent(Agent):
                 "language": body["language"],
                 "duration_s": body["duration_s"],
                 "model": body["model"],
+                "confidence": body["confidence"],
+                "low_confidence": body["low_confidence"],
+                "no_speech": body["no_speech"],
             },
             trace=[
                 TraceEvent(
                     agent=self.name,
                     step="transcribe",
                     detail={
-                        # Nunca el texto: la traza viaja al cliente y se
-                        # registra. El contenido ya esta en el mensaje.
+                        # Nunca el texto: la traza viaja al cliente y se audita.
                         "audio_kb": round(len(audio) / 1024, 1),
                         "audio_s": body["duration_s"],
                         "chars": len(body["text"]),
-                        "modelo": body["model"],
-                        "idioma": body["language"],
+                        "confianza": body["confidence"],
+                        "dudosa": body["low_confidence"],
                     },
-                    duration_ms=elapsed,
+                    duration_ms=int((time.perf_counter() - started) * 1000),
+                )
+            ],
+        )
+
+    async def _speak(self, request: AgentRequest) -> AgentResponse:
+        text: str = (request.payload.get("text") or "").strip()
+        if not text:
+            return AgentResponse.failure("No hay texto que sintetizar")
+
+        started = time.perf_counter()
+        try:
+            async with httpx.AsyncClient(timeout=self._timeout) as client:
+                response = await client.post(f"{self._base_url}/speak", json={"text": text})
+                if response.status_code >= 400:
+                    detail = response.json().get("detail", response.text)
+                    return AgentResponse.failure(f"Servicio de voz: {detail}")
+                audio = response.content
+        except httpx.HTTPError as exc:
+            return AgentResponse.failure(
+                f"No se pudo contactar con el servicio de voz: {type(exc).__name__}"
+            )
+
+        return AgentResponse(
+            ok=True,
+            data={"audio": audio, "media_type": "audio/wav"},
+            trace=[
+                TraceEvent(
+                    agent=self.name,
+                    step="speak",
+                    detail={"chars": len(text), "audio_kb": round(len(audio) / 1024, 1)},
+                    duration_ms=int((time.perf_counter() - started) * 1000),
                 )
             ],
         )
@@ -97,4 +133,5 @@ class VoiceAgent(Agent):
             "status": body.get("status", "unknown"),
             "model": body.get("model"),
             "device": body.get("device"),
+            "speech": body.get("speech"),
         }

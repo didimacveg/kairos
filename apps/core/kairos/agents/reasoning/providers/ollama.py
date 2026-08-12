@@ -33,7 +33,7 @@ class OllamaProvider(LLMProvider):
             "model": model,
             "messages": [{"role": t.role, "content": t.content} for t in turns],
             "stream": stream,
-            "options": {"temperature": 0.7, "num_ctx": 8192},
+            "options": {"temperature": 0.7, "num_ctx": 8192, "num_predict": -1},
         }
 
     async def complete(self, turns: list[ChatTurn], *, model: str | None = None) -> Completion:

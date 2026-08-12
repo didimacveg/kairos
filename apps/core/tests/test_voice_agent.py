@@ -49,6 +49,9 @@ async def test_transcription_success(monkeypatch: pytest.MonkeyPatch) -> None:
                 "latency_ms": 300,
                 "model": "medium",
                 "segments": 1,
+                "confidence": -0.3,
+                "low_confidence": False,
+                "no_speech": False,
             },
         )
 
@@ -74,6 +77,9 @@ async def test_trace_never_contains_the_transcript(monkeypatch: pytest.MonkeyPat
                 "latency_ms": 100,
                 "model": "medium",
                 "segments": 1,
+                "confidence": -0.3,
+                "low_confidence": False,
+                "no_speech": False,
             },
         )
 

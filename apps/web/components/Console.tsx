@@ -1,20 +1,20 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, streamChat, type ChatStreamEnd, type Health, type MemoryHit, type TraceEntry } from "@/lib/api";
+import {
+  api,
+  streamChat,
+  type ChatStreamEnd,
+  type Health,
+  type MemoryHit,
+  type TraceEntry,
+} from "@/lib/api";
+import { SpeechQueue } from "@/lib/speech";
 import { Instruments, type TurnSummary } from "./Instruments";
-import { MicButton } from "./MicButton";
 import { StatusStrip } from "./StatusStrip";
+import { VoiceSession } from "./VoiceSession";
 
 type Entry = { from: "me" | "kairos"; said: string };
-
-/** Arranques sugeridos. Son ejemplos reales de lo que KAIROS sabe hacer hoy,
- *  no promesas de funciones que aún no existen. */
-const OPENERS = [
-  "Recuerda que trabajo mejor por las noches",
-  "¿Qué sabes de mí?",
-  "Explícame cómo funciona un motor de combustión",
-];
 
 export function Console({ username, onSignOut }: { username: string; onSignOut: () => void }) {
   const [entries, setEntries] = useState<Entry[]>([]);
@@ -26,9 +26,11 @@ export function Console({ username, onSignOut }: { username: string; onSignOut: 
   const [liveMemories, setLiveMemories] = useState<MemoryHit[]>([]);
   const [health, setHealth] = useState<Health | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
+  const [voiceOn, setVoiceOn] = useState(false);
 
   const foot = useRef<HTMLDivElement>(null);
   const abortRef = useRef<(() => void) | null>(null);
+  const speechRef = useRef<SpeechQueue | null>(null);
   const boxRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -42,10 +44,16 @@ export function Console({ username, onSignOut }: { username: string; onSignOut: 
     foot.current?.scrollIntoView({ behavior: "smooth" });
   }, [entries, streaming]);
 
-  useEffect(() => () => abortRef.current?.(), []);
+  useEffect(
+    () => () => {
+      abortRef.current?.();
+      speechRef.current?.stop();
+    },
+    [],
+  );
 
   const send = useCallback(
-    (text?: string) => {
+    (text?: string, speak = false) => {
       const message = (text ?? draft).trim();
       if (!message || streaming) return;
 
@@ -57,8 +65,13 @@ export function Console({ username, onSignOut }: { username: string; onSignOut: 
       setStreaming(true);
       setEntries((prev) => [...prev, { from: "me", said: message }, { from: "kairos", said: "" }]);
 
+      speechRef.current?.stop();
+      const voice = speak ? new SpeechQueue((message) => setFault(message)) : null;
+      speechRef.current = voice;
+
       abortRef.current = streamChat(message, conversationId, {
         onToken: (chunk) => {
+          voice?.push(chunk);
           setEntries((prev) => {
             const next = [...prev];
             const target = next[next.length - 1];
@@ -74,6 +87,7 @@ export function Console({ username, onSignOut }: { username: string; onSignOut: 
           if (typeof data.conversation_id === "string") setConversationId(data.conversation_id);
         },
         onEnd: (done: ChatStreamEnd) => {
+          voice?.flush();
           setStreaming(false);
           setConversationId(done.conversation_id);
           setSummary({
@@ -85,6 +99,7 @@ export function Console({ username, onSignOut }: { username: string; onSignOut: 
           });
         },
         onError: (message) => {
+          voice?.stop();
           setStreaming(false);
           setFault(message);
           setEntries((prev) => {
@@ -101,8 +116,23 @@ export function Console({ username, onSignOut }: { username: string; onSignOut: 
 
   const halt = useCallback(() => {
     abortRef.current?.();
+    speechRef.current?.stop();
     setStreaming(false);
   }, []);
+
+  /** KAIROS dice algo por su cuenta (p. ej. "no te he entendido") sin
+   *  pasar por el modelo: es una respuesta del sistema, no una generación. */
+  const say = useCallback(
+    (message: string) => {
+      setEntries((prev) => [...prev, { from: "kairos", said: message }]);
+      if (voiceOn) {
+        const queue = new SpeechQueue();
+        queue.push(message);
+        queue.flush();
+      }
+    },
+    [voiceOn],
+  );
 
   return (
     <div className="deck">
@@ -110,6 +140,7 @@ export function Console({ username, onSignOut }: { username: string; onSignOut: 
         health={health}
         username={username}
         busy={streaming}
+        listening={voiceOn}
         lastLatency={summary?.latency_ms ?? null}
         lastModel={summary?.model ?? null}
         recalled={summary ? summary.memories.length : null}
@@ -123,16 +154,9 @@ export function Console({ username, onSignOut }: { username: string; onSignOut: 
               <div className="standby">
                 <h1>Todo ocurre en esta máquina.</h1>
                 <p>
-                  KAIROS busca en su memoria antes de responder y te enseña a la derecha
-                  exactamente qué consultó. Empieza por donde quieras:
+                  Escribe, o enciende la sesión de voz y habla. KAIROS consulta su memoria
+                  antes de responder y te enseña a la derecha exactamente qué usó.
                 </p>
-                <ul>
-                  {OPENERS.map((opener) => (
-                    <li key={opener} onClick={() => send(opener)}>
-                      {opener}
-                    </li>
-                  ))}
-                </ul>
               </div>
             )}
 
@@ -171,12 +195,15 @@ export function Console({ username, onSignOut }: { username: string; onSignOut: 
                 }
               }}
             />
-            <MicButton
-              disabled={streaming}
-              onTranscript={(text) => {
-                setDraft((prev) => (prev ? `${prev} ${text}` : text));
-                boxRef.current?.focus();
+            <VoiceSession
+              active={voiceOn}
+              busy={streaming}
+              onToggle={(next) => {
+                setVoiceOn(next);
+                if (!next) speechRef.current?.stop();
               }}
+              onUtterance={(text) => send(text, true)}
+              onSay={say}
             />
             {streaming ? (
               <button type="button" onClick={halt}>
