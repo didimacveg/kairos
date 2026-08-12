@@ -5,13 +5,16 @@ import type { Health } from "@/lib/api";
 /**
  * Sigilo K.A.I.R.O.S — el núcleo visible del sistema.
  *
- * Es lo primero que ves al entrar y lo que queda cuando no hay conversación.
- * Los anillos no son decoración: cada uno codifica un estado real.
+ * Es la pieza central de la interfaz y lo sigue siendo mientras KAIROS
+ * responde. La regla del proyecto no cambia: **cada elemento codifica un
+ * estado real**.
  *
- *   exterior   agentes vivos — el arco cubre la fracción que responde
- *   medio      gira solo mientras el modelo genera
- *   interior   pulsa cuando el micrófono está escuchando
- *   núcleo     rojo si hay salida a Internet permitida
+ *   arco exterior   fracción de agentes que responden al health check
+ *   anillo de datos gira solo mientras el modelo genera
+ *   contra-anillo   gira al revés; da profundidad y marca la misma actividad
+ *   marcas de memoria  una por recuerdo consultado en el último turno
+ *   anillo interior pulsa solo cuando el micrófono escucha
+ *   núcleo          rojo si hay salida a Internet permitida
  *
  * Si el sistema está parado, el sigilo está quieto. Un adorno que gira siempre
  * no dice nada; uno que gira cuando la máquina piensa te dice que piensa.
@@ -20,101 +23,132 @@ export function Sigil({
   health,
   busy,
   listening,
+  recalled = 0,
   compact,
 }: {
   health: Health | null;
   busy: boolean;
   listening: boolean;
+  recalled?: number;
   compact?: boolean;
 }) {
   const total = health?.agents.length ?? 0;
   const up = health?.agents.filter((a) => a.status === "ok").length ?? 0;
   const ratio = total > 0 ? up / total : 0;
 
-  const R_OUT = 92;
-  const circumference = 2 * Math.PI * R_OUT;
+  const R_AGENTS = 148;
+  const circumference = 2 * Math.PI * R_AGENTS;
   const arc = circumference * ratio;
+
+  // Una marca por recuerdo consultado, repartidas por el anillo exterior.
+  const ticks = Math.min(recalled, 12);
 
   return (
     <div className="sigil" data-compact={compact || undefined} data-busy={busy || undefined}>
-      <svg viewBox="0 0 240 240" role="img" aria-label="Estado de KAIROS">
+      <svg viewBox="0 0 360 360" role="img" aria-label="Estado de KAIROS">
         <defs>
-          <radialGradient id="core-glow">
-            <stop offset="0%" stopColor="var(--brass)" stopOpacity="0.5" />
-            <stop offset="70%" stopColor="var(--brass)" stopOpacity="0.06" />
+          <radialGradient id="k-core">
+            <stop offset="0%" stopColor="var(--brass)" stopOpacity="0.42" />
+            <stop offset="55%" stopColor="var(--brass)" stopOpacity="0.07" />
             <stop offset="100%" stopColor="var(--brass)" stopOpacity="0" />
           </radialGradient>
+          <linearGradient id="k-sweep" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="var(--ice)" stopOpacity="0" />
+            <stop offset="100%" stopColor="var(--ice)" stopOpacity="0.9" />
+          </linearGradient>
         </defs>
 
-        <circle cx="120" cy="120" r="86" fill="url(#core-glow)" />
+        <circle cx="180" cy="180" r="140" fill="url(#k-core)" />
 
-        {/* Exterior — agentes vivos */}
-        <circle
-          cx="120" cy="120" r={R_OUT}
-          fill="none" stroke="var(--rule-bright)" strokeWidth="1"
-        />
+        {/* Marcas de memoria consultada */}
+        <g className="ticks">
+          {Array.from({ length: ticks }, (_, i) => (
+            <line
+              key={i}
+              x1="180" y1="14" x2="180" y2="26"
+              stroke="var(--ice)" strokeWidth="2" opacity="0.85"
+              transform={`rotate(${(360 / 12) * i} 180 180)`}
+            />
+          ))}
+        </g>
+
+        {/* Agentes vivos */}
+        <circle cx="180" cy="180" r={R_AGENTS} fill="none" stroke="var(--rule-bright)" strokeWidth="1" />
         <circle
           className="ring-agents"
-          cx="120" cy="120" r={R_OUT}
-          fill="none" stroke="var(--ice)" strokeWidth="2" strokeLinecap="butt"
+          cx="180" cy="180" r={R_AGENTS}
+          fill="none" stroke="var(--ice)" strokeWidth="2.5"
           strokeDasharray={`${arc} ${circumference}`}
-          transform="rotate(-90 120 120)"
+          transform="rotate(-90 180 180)"
         />
 
-        {/* Medio — gira mientras genera */}
-        <g className="ring-think" data-live={busy || undefined}>
+        {/* Barrido: solo mientras genera */}
+        <g className="ring-sweep" data-live={busy || undefined}>
           <circle
-            cx="120" cy="120" r="70"
-            fill="none" stroke="var(--brass)" strokeWidth="1"
-            strokeDasharray="26 14" opacity="0.75"
-          />
-          <circle
-            cx="120" cy="120" r="62"
-            fill="none" stroke="var(--brass-dim)" strokeWidth="1"
-            strokeDasharray="4 22"
+            cx="180" cy="180" r="126"
+            fill="none" stroke="url(#k-sweep)" strokeWidth="3"
+            strokeDasharray="180 612" strokeLinecap="round"
           />
         </g>
 
-        {/* Interior — escucha */}
-        <circle
-          className="ring-listen"
-          cx="120" cy="120" r="48"
-          fill="none"
-          stroke={listening ? "var(--ember)" : "var(--rule-bright)"}
-          strokeWidth="1"
-          data-live={listening || undefined}
-        />
+        {/* Anillo de datos y contra-anillo */}
+        <g className="ring-data" data-live={busy || undefined}>
+          <circle
+            cx="180" cy="180" r="112"
+            fill="none" stroke="var(--brass)" strokeWidth="1.5"
+            strokeDasharray="34 18" opacity="0.8"
+          />
+        </g>
+        <g className="ring-counter" data-live={busy || undefined}>
+          <circle
+            cx="180" cy="180" r="98"
+            fill="none" stroke="var(--brass-dim)" strokeWidth="1"
+            strokeDasharray="5 27"
+          />
+        </g>
 
-        {/* Marcas de cuadrante: dan sensación de instrumento calibrado */}
-        {[0, 90, 180, 270].map((deg) => (
+        {/* Estructura fija: da sensación de instrumento calibrado */}
+        {[0, 45, 90, 135, 180, 225, 270, 315].map((deg) => (
           <line
             key={deg}
-            x1="120" y1="18" x2="120" y2="30"
-            stroke="var(--brass)" strokeWidth="1.5" opacity="0.7"
-            transform={`rotate(${deg} 120 120)`}
+            x1="180" y1="40" x2="180" y2="54"
+            stroke="var(--brass)" strokeWidth={deg % 90 === 0 ? 2 : 1}
+            opacity={deg % 90 === 0 ? 0.85 : 0.4}
+            transform={`rotate(${deg} 180 180)`}
           />
         ))}
 
-        {/* Núcleo — estado de la salida de datos */}
+        <circle cx="180" cy="180" r="84" fill="none" stroke="var(--rule-bright)" strokeWidth="1" opacity="0.7" />
+
+        {/* Escucha */}
         <circle
-          cx="120" cy="120" r="5"
-          fill={health?.egress_allowed ? "var(--ember)" : "var(--brass)"}
-          className="core-dot"
+          className="ring-listen"
+          cx="180" cy="180" r="70"
+          fill="none"
+          stroke={listening ? "var(--ember)" : "var(--rule-bright)"}
+          strokeWidth="1.5"
+          data-live={listening || undefined}
         />
+
+        {/* Núcleo: estado de la salida de datos */}
+        <circle cx="180" cy="180" r="7" className="core-dot"
+          fill={health?.egress_allowed ? "var(--ember)" : "var(--brass)"} />
       </svg>
 
-      <div className="sigil-mark">
-        <span>K.A.I.R.O.S</span>
-        <small>
-          {busy
-            ? "procesando"
-            : listening
-              ? "escuchando"
-              : total
-                ? `${up} de ${total} agentes en línea`
-                : "sin contacto con el núcleo"}
-        </small>
-      </div>
+      {!compact && (
+        <div className="sigil-mark">
+          <span>K.A.I.R.O.S</span>
+          <small>
+            {busy
+              ? "procesando"
+              : listening
+                ? "escuchando"
+                : total
+                  ? `${up} de ${total} agentes en línea`
+                  : "sin contacto con el núcleo"}
+          </small>
+        </div>
+      )}
     </div>
   );
 }

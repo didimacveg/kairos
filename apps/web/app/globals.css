@@ -684,114 +684,200 @@ button:disabled { opacity: 0.35; cursor: not-allowed; }
   .cursor { visibility: visible; }
 }
 
+
 /* ==========================================================================
-   SIGILO K.A.I.R.O.S
-   Cada anillo codifica un estado real. Nada gira porque sí: si la máquina
-   está parada, el sigilo está quieto.
+   FASE 2H — el sigilo manda
+   El holograma deja de ser una pantalla de espera y pasa a ser la pieza
+   permanente. La conversación se reparte: el registro completo en un carril
+   estrecho a la izquierda, y la última respuesta en grande bajo los anillos.
    ========================================================================== */
 
-.sigil {
-  display: grid;
-  place-items: center;
-  gap: 1.1rem;
-  padding: 1rem 0 2rem;
-  transition: transform 0.5s ease, opacity 0.4s ease;
+.bay {
+  grid-template-columns: 17rem minmax(0, 1fr) 20rem;
 }
 
-.sigil svg {
-  width: min(58vh, 20rem);
-  height: auto;
-  overflow: visible;
-  filter: drop-shadow(0 0 26px rgba(255, 182, 39, 0.16));
+/* --- carril de registro --------------------------------------------------- */
+
+.log-rail {
+  border-right: 1px solid var(--rule-bright);
+  background: var(--panel);
+  overflow-y: auto;
+  padding: 1.15rem 1rem 2rem;
+  scrollbar-width: thin;
+  scrollbar-color: var(--rule-bright) transparent;
 }
 
-.sigil-mark {
-  text-align: center;
-  display: grid;
-  gap: 0.45rem;
-}
-
-.sigil-mark span {
-  font-family: var(--ui);
-  font-size: 1.6rem;
-  font-weight: 300;
-  letter-spacing: 0.42em;
-  text-indent: 0.42em;
-  color: var(--bone);
-  text-shadow: 0 0 26px var(--brass-glow);
-}
-
-.sigil-mark small {
+.log-rail h2 {
   font-family: var(--data);
   font-size: 0.5625rem;
   letter-spacing: var(--track-label);
   text-transform: uppercase;
+  font-weight: 500;
   color: var(--faint);
+  margin: 0 0 0.9rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--rule);
 }
 
-.sigil[data-busy] .sigil-mark small { color: var(--brass); }
+.log-rail .line { margin-bottom: 1rem; }
 
-/* --- anillos --- */
+.log-rail .who {
+  font-family: var(--data);
+  font-size: 0.5rem;
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--faint);
+  display: block;
+  margin-bottom: 0.2rem;
+}
+
+.log-rail .line[data-from="kairos"] .who { color: var(--brass); }
+
+.log-rail p {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: #98a9ad;
+  /* El registro es para localizar, no para leer entero: se recorta a seis
+     líneas. La respuesta completa está en el escenario. */
+  display: -webkit-box;
+  -webkit-line-clamp: 6;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.log-rail .line[data-from="kairos"] p { color: #c2cfd1; }
+.log-rail .quiet { color: var(--faint); font-size: 0.7rem; }
+
+/* --- escenario ------------------------------------------------------------ */
+
+.stage {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-height: 0;
+  padding: 1.5rem var(--edge) 0;
+  justify-items: center;
+  gap: 1rem;
+}
+
+.stage .sigil { padding: 0; }
+
+.stage .sigil svg {
+  width: min(46vh, 30rem);
+  filter: drop-shadow(0 0 48px rgba(255, 182, 39, 0.2));
+}
+
+.utterance {
+  overflow-y: auto;
+  max-width: 44rem;
+  width: 100%;
+  padding: 0 0.5rem;
+  scrollbar-width: thin;
+  scrollbar-color: var(--rule-bright) transparent;
+}
+
+.utterance p {
+  margin: 0;
+  font-size: var(--t-lead);
+  line-height: 1.62;
+  white-space: pre-wrap;
+  text-align: center;
+}
+
+.utterance .quiet {
+  color: var(--dim);
+  font-size: var(--t-body);
+}
+
+.utterance .quiet b {
+  color: var(--brass);
+  font-weight: 500;
+  font-family: var(--data);
+  font-size: 0.85em;
+  letter-spacing: 0.08em;
+}
+
+.utterance[data-streaming] p::after {
+  content: "";
+  display: inline-block;
+  width: 0.5em;
+  height: 1em;
+  margin-left: 0.15em;
+  background: var(--brass);
+  box-shadow: 0 0 12px var(--brass-glow);
+  vertical-align: text-bottom;
+  animation: cursor-blink 1.1s steps(2, start) infinite;
+}
+
+.stage .console {
+  width: 100%;
+  max-width: 52rem;
+  border-top: none;
+  background: transparent;
+  padding: 0.9rem 0 1.4rem;
+}
+
+.stage .fault { max-width: 44rem; }
+
+/* --- sigilo compacto en la cabecera --------------------------------------- */
+
+.sigil[data-compact] { padding: 0; gap: 0; }
+.sigil[data-compact] svg { width: 1.9rem; filter: none; }
+
+/* --- anillos -------------------------------------------------------------- */
 
 .ring-agents {
   transition: stroke-dasharray 0.6s ease;
-  filter: drop-shadow(0 0 6px var(--ice-glow));
+  filter: drop-shadow(0 0 8px var(--ice-glow));
 }
 
-.ring-think { transform-origin: 120px 120px; }
+.ticks line { filter: drop-shadow(0 0 6px var(--ice-glow)); }
 
-.ring-think[data-live] {
-  animation: sigil-spin 7s linear infinite;
-  filter: drop-shadow(0 0 8px var(--brass-glow));
+.ring-sweep { transform-origin: 180px 180px; opacity: 0; }
+
+.ring-sweep[data-live] {
+  opacity: 1;
+  animation: sigil-spin 1.9s linear infinite;
 }
 
-.ring-think[data-live] circle:last-child {
-  animation: sigil-spin-back 4s linear infinite;
-  transform-origin: 120px 120px;
+.ring-data,
+.ring-counter { transform-origin: 180px 180px; }
+
+.ring-data[data-live] {
+  animation: sigil-spin 9s linear infinite;
+  filter: drop-shadow(0 0 10px var(--brass-glow));
 }
+
+.ring-counter[data-live] { animation: sigil-spin-back 5.5s linear infinite; }
 
 .ring-listen[data-live] {
   animation: sigil-pulse 1.6s ease-in-out infinite;
-  filter: drop-shadow(0 0 8px var(--ember-glow));
+  filter: drop-shadow(0 0 12px var(--ember-glow));
 }
 
-.core-dot { filter: drop-shadow(0 0 10px var(--brass-glow)); }
+.core-dot { filter: drop-shadow(0 0 14px var(--brass-glow)); }
 
 @keyframes sigil-spin { to { transform: rotate(360deg); } }
 @keyframes sigil-spin-back { to { transform: rotate(-360deg); } }
-@keyframes sigil-pulse {
-  50% { opacity: 0.35; r: 52; }
+@keyframes sigil-pulse { 50% { opacity: 0.3; } }
+
+/* --- pantalla estrecha ---------------------------------------------------- */
+
+@media (max-width: 1200px) {
+  .bay { grid-template-columns: minmax(0, 1fr) 19rem; }
+  .log-rail { display: none; }
 }
 
-/* --- se retira a la cabecera cuando empieza la conversación --- */
-
-.sigil[data-compact] { padding: 0; gap: 0.55rem; }
-
-.sigil[data-compact] svg {
-  width: 2.1rem;
-  filter: none;
-}
-
-.sigil[data-compact] .sigil-mark { display: none; }
-
-/* El sigilo en el centro necesita su propio contenedor centrado */
-.core-stage {
-  display: grid;
-  place-items: center;
-  min-height: 100%;
-  padding: 1rem;
-}
-
-.core-stage .hint {
-  max-width: 30rem;
-  text-align: center;
-  color: var(--dim);
-  font-size: var(--t-small);
-  margin: 0;
+@media (max-width: 900px) {
+  .bay { grid-template-columns: minmax(0, 1fr); grid-template-rows: 1fr auto; }
+  .stage .sigil svg { width: min(34vh, 15rem); }
+  .instruments { max-height: 36vh; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ring-think[data-live],
-  .ring-think[data-live] circle:last-child,
+  .ring-sweep[data-live],
+  .ring-data[data-live],
+  .ring-counter[data-live],
   .ring-listen[data-live] { animation: none; }
+  .ring-sweep[data-live] { opacity: 0.6; }
 }

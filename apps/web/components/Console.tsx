@@ -17,6 +17,12 @@ import { VoiceSession } from "./VoiceSession";
 
 type Entry = { from: "me" | "kairos"; said: string };
 
+/** Atajos que abren y cierran la sesión de voz. Alt+K y Alt+7. */
+function isVoiceHotkey(event: KeyboardEvent): boolean {
+  if (!event.altKey || event.ctrlKey || event.metaKey) return false;
+  return event.code === "KeyK" || event.code === "Digit7" || event.code === "Numpad7";
+}
+
 export function Console({ username, onSignOut }: { username: string; onSignOut: () => void }) {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [draft, setDraft] = useState("");
@@ -29,7 +35,7 @@ export function Console({ username, onSignOut }: { username: string; onSignOut: 
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [voiceOn, setVoiceOn] = useState(false);
 
-  const foot = useRef<HTMLDivElement>(null);
+  const logFoot = useRef<HTMLDivElement>(null);
   const abortRef = useRef<(() => void) | null>(null);
   const speechRef = useRef<SpeechQueue | null>(null);
   const boxRef = useRef<HTMLTextAreaElement>(null);
@@ -42,7 +48,7 @@ export function Console({ username, onSignOut }: { username: string; onSignOut: 
   }, []);
 
   useEffect(() => {
-    foot.current?.scrollIntoView({ behavior: "smooth" });
+    logFoot.current?.scrollIntoView({ behavior: "smooth" });
   }, [entries, streaming]);
 
   useEffect(
@@ -67,7 +73,7 @@ export function Console({ username, onSignOut }: { username: string; onSignOut: 
       setEntries((prev) => [...prev, { from: "me", said: message }, { from: "kairos", said: "" }]);
 
       speechRef.current?.stop();
-      const voice = speak ? new SpeechQueue((message) => setFault(message)) : null;
+      const voice = speak ? new SpeechQueue((m) => setFault(m)) : null;
       speechRef.current = voice;
 
       abortRef.current = streamChat(message, conversationId, {
@@ -121,8 +127,6 @@ export function Console({ username, onSignOut }: { username: string; onSignOut: 
     setStreaming(false);
   }, []);
 
-  /** KAIROS dice algo por su cuenta (p. ej. "no te he entendido") sin
-   *  pasar por el modelo: es una respuesta del sistema, no una generación. */
   const say = useCallback(
     (message: string) => {
       setEntries((prev) => [...prev, { from: "kairos", said: message }]);
@@ -134,6 +138,25 @@ export function Console({ username, onSignOut }: { username: string; onSignOut: 
     },
     [voiceOn],
   );
+
+  // Atajo global dentro de la pestaña. Un atajo que funcione con la ventana
+  // minimizada necesita el demonio de host: el navegador no puede.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (!isVoiceHotkey(event)) return;
+      event.preventDefault();
+      setVoiceOn((prev) => {
+        if (prev) speechRef.current?.stop();
+        return !prev;
+      });
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // La última respuesta de KAIROS, que es la que se muestra grande bajo el
+  // sigilo. El historial completo vive en el carril de la izquierda.
+  const current = [...entries].reverse().find((e) => e.from === "kairos");
 
   return (
     <div className="deck">
@@ -149,42 +172,47 @@ export function Console({ username, onSignOut }: { username: string; onSignOut: 
       />
 
       <div className="bay">
-        <div className="channel">
-          <div className="log">
-            {entries.length === 0 && (
-              <div className="core-stage">
-                <Sigil health={health} busy={streaming} listening={voiceOn} />
-                <p className="hint">
-                  Escribe, o enciende la sesión de voz y habla. Todo el procesamiento
-                  ocurre en esta máquina.
-                </p>
-              </div>
+        {/* Carril de registro: la conversación completa, en pequeño */}
+        <aside className="log-rail">
+          <h2>Registro</h2>
+          {entries.length === 0 && <p className="quiet">Sin actividad todavía.</p>}
+          {entries.map((entry, index) => (
+            <div className="line" data-from={entry.from} key={index}>
+              <span className="who">{entry.from === "me" ? username : "kairos"}</span>
+              <p>{entry.said || "…"}</p>
+            </div>
+          ))}
+          <div ref={logFoot} />
+        </aside>
+
+        {/* Escenario: el sigilo manda siempre */}
+        <div className="stage">
+          <Sigil
+            health={health}
+            busy={streaming}
+            listening={voiceOn}
+            recalled={summary?.memories.length ?? liveMemories.length}
+          />
+
+          <div className="utterance" data-streaming={streaming || undefined}>
+            {current?.said ? (
+              <p>{current.said}</p>
+            ) : streaming ? (
+              <p className="quiet">Consultando memoria…</p>
+            ) : (
+              <p className="quiet">
+                Pulsa <b>Alt+K</b> para hablar, o escribe abajo. Todo el procesamiento
+                ocurre en esta máquina.
+              </p>
             )}
-
-            {entries.map((entry, index) => {
-              const pending = streaming && index === entries.length - 1 && entry.from === "kairos";
-              return (
-                <article className="entry" data-from={entry.from} key={index}>
-                  <div className="from">{entry.from === "me" ? username : "kairos"}</div>
-                  <div className="said">
-                    {entry.said}
-                    {pending && entry.said === "" && (
-                      <span className="thinking">Consultando memoria…</span>
-                    )}
-                    {pending && <span className="cursor" aria-hidden="true" />}
-                  </div>
-                </article>
-              );
-            })}
-
-            {fault && <div className="fault">{fault}</div>}
-            <div ref={foot} />
           </div>
+
+          {fault && <div className="fault">{fault}</div>}
 
           <div className="console">
             <textarea
               ref={boxRef}
-              rows={2}
+              rows={1}
               value={draft}
               placeholder="Habla o escribe"
               aria-label="Mensaje"
