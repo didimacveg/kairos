@@ -1,0 +1,48 @@
+{
+  "hotkey": "win+shift+k",
+
+  "_comentario": [
+    "Cada perfil es una lista de aplicaciones. KAIROS solo puede ejecutar lo",
+    "que aparezca aqui: no hay forma de que abra nada que no hayas declarado.",
+    "",
+    "launch  ruta del ejecutable, o un URI del sistema (spotify:, ms-teams:),",
+    "        o una URL. Nunca se interpreta como linea de comandos.",
+    "window  trozo del titulo de la ventana, para encontrarla y recolocarla.",
+    "monitor 0 = el de mas a la izquierda.",
+    "slot    full | left | right | top-left | top-right | bottom-left | bottom-right"
+  ],
+
+  "profiles": {
+    "casa": {
+      "say": "Bienvenido a casa, Diego. Abriendo tu espacio.",
+      "apps": [
+        { "name": "Spotify", "launch": "spotify:", "window": "Spotify", "monitor": 1, "slot": "right" },
+        { "name": "KAIROS", "launch": "http://localhost:3000", "window": "KAIROS", "monitor": 0, "slot": "full" },
+        { "name": "Discord", "launch": "discord:", "window": "Discord", "monitor": 1, "slot": "left" }
+      ]
+    },
+
+    "trabajo": {
+      "say": "Modo trabajo. Todo listo.",
+      "apps": [
+        { "name": "VS Code", "launch": "code", "window": "Visual Studio Code", "monitor": 0, "slot": "left" },
+        { "name": "Terminal", "launch": "wt.exe", "window": "Terminal", "monitor": 0, "slot": "right" },
+        { "name": "KAIROS", "launch": "http://localhost:3000", "window": "KAIROS", "monitor": 1, "slot": "full" }
+      ]
+    },
+
+    "instituto": {
+      "say": "Modo instituto.",
+      "apps": [
+        { "name": "Classroom", "launch": "https://classroom.google.com", "window": "Classroom", "monitor": 0, "slot": "left" },
+        { "name": "Drive", "launch": "https://drive.google.com", "window": "Drive", "monitor": 0, "slot": "right" }
+      ]
+    }
+  },
+
+  "phrases": {
+    "papi esta en casa": "casa",
+    "modo trabajo": "trabajo",
+    "modo instituto": "instituto"
+  }
+}

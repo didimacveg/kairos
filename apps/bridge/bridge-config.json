@@ -1,0 +1,166 @@
+{
+  "hotkey": "win+shift+k",
+  "wake_words": [
+    "kairos",
+    "cairos",
+    "kairo",
+    "cairo"
+  ],
+  "always_listening": true,
+  "_como_conseguir_las_canciones": [
+    "Los URI 'spotify:track:...' de abajo son PLACEHOLDERS y no funcionaran.",
+    "Para cada cancion: abrela en Spotify, clic derecho sobre ella,",
+    "Compartir > Copiar enlace de la cancion, y pega aqui la parte del ID.",
+    "Un enlace https://open.spotify.com/track/ABC123?si=xx  se convierte en",
+    "spotify:track:ABC123   (todo lo que va despues de ? se descarta).",
+    "Sin el URI real, Spotify se abre pero no reproduce nada."
+  ],
+  "_notas": [
+    "monitor 0 = el de mas a la izquierda, 1 = el siguiente.",
+    "slot: full | left | right | top-left | top-right | bottom-left | bottom-right",
+    "'window' es un trozo del titulo de la ventana; sirve para encontrarla,",
+    "recolocarla y —al cerrar el perfil— saber cual cerrar."
+  ],
+  "profiles": {
+    "estudio": {
+      "say": "Modo estudio. Aula virtual y calendario listos.",
+      "apps": [
+        {
+          "name": "Spotify",
+          "launch": "spotify:track:4LhgwcTWwJQc6DFTkLXVEc",
+          "window": "Spotify",
+          "monitor": "secundario",
+          "slot": "full",
+          "play": true
+        },
+        {
+          "name": "Aula Virtual",
+          "launch": "https://aulavirtual.educa.madrid.org",
+          "window": "Aula",
+          "monitor": "principal",
+          "slot": "left"
+        },
+        {
+          "name": "Correo",
+          "launch": "https://mail.google.com",
+          "window": "Gmail",
+          "monitor": "principal",
+          "slot": "right"
+        },
+        {
+          "name": "Calendar",
+          "launch": "https://calendar.google.com",
+          "window": "Calendar",
+          "monitor": "principal",
+          "slot": "bottom-left"
+        },
+        {
+          "name": "YouTube",
+          "launch": "https://youtube.com",
+          "window": "YouTube",
+          "monitor": "principal",
+          "slot": "bottom-right"
+        }
+      ]
+    },
+    "trabajo": {
+      "say": "Modo trabajo. KAIROS en marcha.",
+      "apps": [
+        {
+          "name": "Spotify",
+          "launch": "spotify:track:08mG3Y1vljYA6bvDt4Wqkj",
+          "window": "Spotify",
+          "monitor": "secundario",
+          "slot": "full",
+          "play": true
+        },
+        {
+          "name": "VS Code",
+          "launch": "code",
+          "args": [
+            "--remote",
+            "wsl+Ubuntu",
+            "/home/diego/kairos-os"
+          ],
+          "window": "Visual Studio Code",
+          "monitor": "principal",
+          "slot": "left"
+        },
+        {
+          "name": "Docker Desktop",
+          "launch": "Docker Desktop",
+          "window": "Docker Desktop",
+          "monitor": "principal",
+          "slot": "right"
+        },
+        {
+          "name": "KAIROS",
+          "launch": "http://localhost:3000",
+          "window": "KAIROS",
+          "monitor": "principal",
+          "slot": "bottom-right"
+        }
+      ]
+    },
+    "juego": {
+      "say": "Modo juego. Que te diviertas.",
+      "apps": [
+        {
+          "name": "Spotify",
+          "launch": "spotify:track:08mG3Y1vljYA6bvDt4Wqkj",
+          "window": "Spotify",
+          "monitor": "secundario",
+          "slot": "full",
+          "play": true
+        },
+        {
+          "name": "Discord",
+          "launch": "discord:",
+          "window": "Discord",
+          "monitor": "secundario",
+          "slot": "bottom-right"
+        },
+        {
+          "name": "Valorant",
+          "launch": "C:\\Riot Games\\Riot Client\\RiotClientServices.exe",
+          "args": [
+            "--launch-product=valorant",
+            "--launch-patchline=live"
+          ],
+          "window": "VALORANT",
+          "monitor": "principal",
+          "slot": "full"
+        },
+        {
+          "name": "Roblox",
+          "launch": "roblox:",
+          "window": "Roblox",
+          "monitor": "principal",
+          "slot": "full"
+        }
+      ]
+    }
+  },
+  "phrases": {
+    "papi esta en casa": "casa",
+    "papi ya esta en casa": "casa"
+  },
+  "chains": {
+    "_nota": "Una frase puede encadenar acciones: primero suena la cancion, luego se abre el perfil.",
+    "casa": {
+      "say": "Bienvenido a casa, Diego.",
+      "then": "trabajo",
+      "apps": [
+        {
+          "name": "Spotify",
+          "launch": "spotify:track:39shmbIHICJ2Wxnk1fPSdz",
+          "window": "Spotify",
+          "monitor": "secundario",
+          "slot": "full",
+          "play": true
+        }
+      ]
+    }
+  },
+  "input_device": 2
+}

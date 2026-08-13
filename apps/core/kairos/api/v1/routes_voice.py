@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from kairos.agents.base import AgentRequest
 from kairos.audit import service as audit
 from kairos.auth.deps import CurrentUser, DbSession
+from kairos.auth.machine import MachineOrUser
 
 router = APIRouter(prefix="/voice", tags=["voice"])
 
@@ -32,7 +33,7 @@ class SpeakIn(BaseModel):
 @router.post("/transcribe", response_model=TranscriptionOut)
 async def transcribe(
     request: Request,
-    user: CurrentUser,
+    user: MachineOrUser,
     db: DbSession,
     audio: Annotated[UploadFile, File()],
 ) -> TranscriptionOut:

@@ -53,6 +53,11 @@ class Settings(BaseSettings):
     search_results: int = Field(5, alias="KAIROS_SEARCH_RESULTS")
     search_region: str = Field("es-es", alias="KAIROS_SEARCH_REGION")
     timezone: str = Field("Europe/Madrid", alias="KAIROS_TIMEZONE")
+    # El puente corre en Windows, fuera de Docker. host.docker.internal es
+    # como Docker Desktop expone la maquina anfitriona al contenedor.
+    bridge_url: str = Field("http://host.docker.internal:8200", alias="KAIROS_BRIDGE_URL")
+    bridge_token: str = Field("", alias="KAIROS_BRIDGE_TOKEN")
+    bridge_enabled: bool = Field(False, alias="KAIROS_BRIDGE_ENABLED")
     anthropic_api_key: str | None = Field(None, alias="ANTHROPIC_API_KEY")
     openai_api_key: str | None = Field(None, alias="OPENAI_API_KEY")
 
