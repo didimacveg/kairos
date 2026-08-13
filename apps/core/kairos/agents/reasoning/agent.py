@@ -195,4 +195,9 @@ class ReasoningAgent(Agent):
             "status": "ok" if await self._provider.available() else "unavailable",
             "provider": self._provider.name,
             "local": self._provider.local,
+            # Distingue "que proveedor esta cableado" de "por donde salio la
+            # ultima respuesta": con failover pueden no coincidir, y esa
+            # diferencia es justo lo que hay que poder ver.
+            "modelo_local": self._settings.chat_model,
+            "modelo_nube": self._settings.cloud_model if self._settings.allow_egress else None,
         }

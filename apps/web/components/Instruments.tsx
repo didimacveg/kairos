@@ -18,6 +18,7 @@ const OPS: Record<string, string> = {
   "reasoning.complete": "Generar respuesta",
   "reasoning.complete_stream": "Generar respuesta",
   "voice.transcribe": "Transcribir voz",
+  "search.web": "Buscar en la web",
 };
 
 const FIELDS: Record<string, string> = {
@@ -34,6 +35,9 @@ const FIELDS: Record<string, string> = {
   local: "ejecución",
   turns: "turnos",
   chars: "caracteres",
+  consulta: "consulta",
+  resultados: "resultados",
+  fuentes: "fuentes",
   kind: "tipo",
 };
 

@@ -51,10 +51,14 @@ export function Sigil({
   recalled?: number;
   compact?: boolean;
 }) {
-  const alive = (health?.agents.length ?? 0) > 0;
-  const total = health?.agents.length ?? 0;
-  const up = health?.agents.filter((a) => a.status === "ok").length ?? 0;
+  // Un agente "disabled" esta apagado a proposito (la busqueda sin egress, por
+  // ejemplo): no cuenta ni como roto ni en el total. Antes discrepaba de la
+  // cabecera y decia "3 de 4" mientras arriba ponia "3/3".
+  const agents = (health?.agents ?? []).filter((a) => a.status !== "disabled");
+  const total = agents.length;
+  const up = agents.filter((a) => a.status === "ok").length;
   const ratio = total > 0 ? up / total : 0;
+  const alive = total > 0;
 
   const R_AGENTS = 176;
   const circ = TAU * R_AGENTS;

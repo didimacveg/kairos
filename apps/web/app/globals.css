@@ -1095,11 +1095,9 @@ body::before {
 }
 
 /* Núcleo apagado: nada se mueve. Es información, no un fallo de estilo. */
-.sigil:not([data-alive]) * { animation: none !important; }
 
-@media (prefers-reduced-motion: reduce) {
-  .sigil * { animation: none !important; }
-}
+
+
 
 /* ==========================================================================
    FASE 3C — velocidades de reposo perceptibles
@@ -1131,8 +1129,58 @@ body::before {
 .sigil[data-busy] .core-halo { animation-duration: 1.1s; }
 
 /* Núcleo caído: todo quieto. Sigue siendo información, no un fallo de estilo. */
-.sigil:not([data-alive]) * { animation: none !important; }
+
+
+
+
+/* ==========================================================================
+   FASE 3D — movimiento: preferencia del sistema vs. decisión del usuario
+   Respetar `prefers-reduced-motion` es correcto por defecto: es una senal de
+   accesibilidad real. Pero es una preferencia GLOBAL del sistema operativo, y
+   el dueno de esta instancia puede querer lo contrario aqui en concreto —
+   tener las animaciones de Windows apagadas por rendimiento no significa
+   querer un HUD muerto.
+
+   Se resuelve con un atributo en <html>:
+     data-motion="on"   gana sobre la preferencia del sistema
+     data-motion="off"  la fuerza aunque el sistema no la pida
+   ========================================================================== */
 
 @media (prefers-reduced-motion: reduce) {
-  .sigil * { animation: none !important; }
+  html:not([data-motion="on"]) .sigil * { animation: none !important; }
+}
+
+html[data-motion="off"] .sigil * { animation: none !important; }
+
+/* El núcleo caído congela todo, siempre. Sigue siendo información. */
+.sigil:not([data-alive]) * { animation: none !important; }
+
+.motion-toggle {
+  padding: 0.3rem 0.6rem !important;
+  font-size: 0.5rem !important;
+  letter-spacing: 0.1em;
+}
+
+/* --- fuentes de la búsqueda ----------------------------------------------- */
+
+.sources { list-style: none; margin: 0; padding: 0; }
+.sources li { padding: 0 0 0.75rem; }
+
+.sources a {
+  color: var(--ice);
+  text-decoration: none;
+  font-family: var(--ui);
+  font-size: 0.78rem;
+  line-height: 1.4;
+  display: block;
+}
+
+.sources a:hover { text-decoration: underline; }
+
+.sources .host {
+  font-family: var(--data);
+  font-size: 0.5625rem;
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--faint);
 }

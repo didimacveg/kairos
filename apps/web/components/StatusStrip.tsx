@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useState } from "react";
+
 import type { Health } from "@/lib/api";
 import { Sigil } from "./Sigil";
 
@@ -34,6 +36,24 @@ export function StatusStrip({
   recalled: number | null;
   onSignOut: () => void;
 }) {
+  const [motion, setMotion] = useState(true);
+
+  // El navegador recuerda la eleccion: es una preferencia del dueno de esta
+  // instancia, no algo que decidir en cada arranque.
+  useEffect(() => {
+    const stored = window.localStorage.getItem("kairos.motion");
+    const on = stored === null ? true : stored === "on";
+    setMotion(on);
+    document.documentElement.dataset.motion = on ? "on" : "off";
+  }, []);
+
+  const toggleMotion = () => {
+    const next = !motion;
+    setMotion(next);
+    document.documentElement.dataset.motion = next ? "on" : "off";
+    window.localStorage.setItem("kairos.motion", next ? "on" : "off");
+  };
+
   const agentsUp = health?.agents.filter((a) => a.status === "ok").length ?? 0;
   // Los desactivados no salen en la cuenta: no estan rotos, estan apagados.
   const agentsTotal = health?.agents.filter((a) => a.status !== "disabled").length ?? 0;
@@ -94,6 +114,14 @@ export function StatusStrip({
       </dl>
 
       <div className="identity">
+        <button
+          type="button"
+          className="motion-toggle"
+          onClick={toggleMotion}
+          title="Animación del sigilo"
+        >
+          {motion ? "Movimiento" : "Estático"}
+        </button>
         <span className="who">{username}</span>
         <button type="button" onClick={onSignOut} style={{ padding: "0.3rem 0.7rem" }}>
           Salir
