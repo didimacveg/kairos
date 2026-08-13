@@ -102,6 +102,7 @@ def find_window(pattern: str) -> int | None:
     return match[0] if match else None
 
 
+SW_MINIMIZE = 6
 SW_RESTORE = 9
 SW_MAXIMIZE = 3
 HWND_TOP = 0
@@ -168,6 +169,8 @@ class AppSpec:
     slot: str = "full"
     args: list[str] = field(default_factory=list)
     play: bool = False
+    # Aplicaciones que hacen falta corriendo pero no quieres ver.
+    background: bool = False
 
 
 def launch(spec: AppSpec) -> str:
@@ -203,6 +206,11 @@ def launch(spec: AppSpec) -> str:
     else:
         action = "recolocada"
 
+    if hwnd and spec.background:
+        if IS_WINDOWS:
+            user32.ShowWindow(hwnd, SW_MINIMIZE)
+        return f"{spec.name} {action} en segundo plano"
+
     if hwnd and spec.window:
         monitors = list_monitors()
         if monitors:
@@ -215,6 +223,7 @@ def launch(spec: AppSpec) -> str:
 
 
 VK_MEDIA_PLAY_PAUSE = 0xB3
+VK_MEDIA_PREV_TRACK = 0xB1
 KEYEVENTF_EXTENDEDKEY = 0x0001
 KEYEVENTF_KEYUP = 0x0002
 
@@ -236,14 +245,28 @@ def window_title(pattern: str) -> str:
     return buf.value
 
 
+def _tap(key: int) -> None:
+    if not IS_WINDOWS:
+        return
+    user32.keybd_event(key, 0, KEYEVENTF_EXTENDEDKEY, 0)
+    user32.keybd_event(key, 0, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP, 0)
+
+
+def restart_track() -> None:
+    """Vuelve al principio de la cancion actual.
+
+    Spotify reanuda donde lo dejaste, asi que abrir el URI de una cancion ya
+    escuchada la retoma a mitad. "Pista anterior" reinicia la actual cuando
+    llevas mas de unos segundos, que es exactamente el caso.
+    """
+    _tap(VK_MEDIA_PREV_TRACK)
+
+
 def press_play() -> None:
     """Tecla multimedia global de reproduccion/pausa."""
     if not IS_WINDOWS:
         return
-    user32.keybd_event(VK_MEDIA_PLAY_PAUSE, 0, KEYEVENTF_EXTENDEDKEY, 0)
-    user32.keybd_event(
-        VK_MEDIA_PLAY_PAUSE, 0, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP, 0
-    )
+    _tap(VK_MEDIA_PLAY_PAUSE)
 
 
 def ensure_playing(pattern: str, timeout: float = 12.0) -> str:
@@ -262,12 +285,16 @@ def ensure_playing(pattern: str, timeout: float = 12.0) -> str:
             time.sleep(0.5)
             continue
         if title.lower() not in IDLE_TITLES:
-            return f"reproduciendo: {title}"
+            restart_track()
+            time.sleep(0.4)
+            return f"reproduciendo desde el principio: {title}"
         press_play()
         time.sleep(1.5)
         title = window_title(pattern).strip()
         if title.lower() not in IDLE_TITLES:
-            return f"reproduciendo: {title}"
+            restart_track()
+            time.sleep(0.4)
+            return f"reproduciendo desde el principio: {title}"
         time.sleep(1.0)
     return "abierto, pero no arranco la reproduccion"
 

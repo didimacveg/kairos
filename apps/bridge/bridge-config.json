@@ -23,7 +23,7 @@
   ],
   "profiles": {
     "estudio": {
-      "say": "Modo estudio. Aula virtual y calendario listos.",
+      "say": "Abriendo tu perfil de estudio. Suerte con la sesión.",
       "apps": [
         {
           "name": "Spotify",
@@ -61,10 +61,11 @@
           "monitor": "principal",
           "slot": "bottom-right"
         }
-      ]
+      ],
+      "say_close": "Cierro el perfil de estudio. Buen trabajo."
     },
     "trabajo": {
-      "say": "Modo trabajo. KAIROS en marcha.",
+      "say": "Modo trabajo activado. Todo tuyo, Diego.",
       "apps": [
         {
           "name": "Spotify",
@@ -91,7 +92,8 @@
           "launch": "Docker Desktop",
           "window": "Docker Desktop",
           "monitor": "principal",
-          "slot": "right"
+          "slot": "right",
+          "background": true
         },
         {
           "name": "KAIROS",
@@ -100,7 +102,8 @@
           "monitor": "principal",
           "slot": "bottom-right"
         }
-      ]
+      ],
+      "say_close": "Cerrando el modo trabajo."
     },
     "juego": {
       "say": "Modo juego. Que te diviertas.",
@@ -138,7 +141,8 @@
           "monitor": "principal",
           "slot": "full"
         }
-      ]
+      ],
+      "say_close": "Cerrando el modo juego."
     }
   },
   "phrases": {
@@ -148,7 +152,7 @@
   "chains": {
     "_nota": "Una frase puede encadenar acciones: primero suena la cancion, luego se abre el perfil.",
     "casa": {
-      "say": "Bienvenido a casa, Diego.",
+      "say": "Bienvenido a casa, Diego. Preparando tu espacio.",
       "then": "trabajo",
       "apps": [
         {

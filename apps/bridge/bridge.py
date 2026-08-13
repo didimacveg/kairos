@@ -35,6 +35,7 @@ import os
 import secrets
 import sys
 import threading
+import time
 from pathlib import Path
 from typing import Any
 
@@ -45,6 +46,7 @@ from pydantic import BaseModel
 
 import actions
 import commands
+import speech
 from listener import WakeListener
 
 CONFIG_PATH = Path(os.getenv("KAIROS_BRIDGE_CONFIG", "bridge-config.json"))
@@ -133,6 +135,7 @@ def _specs(entry: dict[str, Any]) -> list[actions.AppSpec]:
             slot=app.get("slot", "full"),
             args=list(app.get("args", [])),
             play=bool(app.get("play", False)),
+            background=bool(app.get("background", False)),
         )
         for app in entry.get("apps", [])
     ]
@@ -143,6 +146,13 @@ def run_profile(name: str) -> dict[str, Any]:
     entry = config.profiles.get(name) or config.chains.get(name)
     if entry is None:
         return {"ok": False, "error": f"perfil no declarado: {name}"}
+
+    # Hablar PRIMERO y esperar a terminar: si no, la frase y la musica se
+    # pisan. Un segundo de voz antes de que arranque todo.
+    frase = entry.get("say", "")
+    if frase:
+        threading.Thread(target=speech.say, args=(frase, SECRET), daemon=False).start()
+        time.sleep(0.2)
 
     results = [actions.launch(spec) for spec in _specs(entry)]
 
@@ -167,6 +177,9 @@ def close_profile(name: str) -> dict[str, Any]:
     if entry is None:
         return {"ok": False, "error": f"perfil no declarado: {name}"}
 
+    frase = entry.get("say_close", f"Cerrando el perfil {name}.")
+    threading.Thread(target=speech.say, args=(frase, SECRET), daemon=False).start()
+
     results = [
         actions.close_window(spec.window)
         for spec in _specs(entry)
@@ -187,6 +200,7 @@ def _unused_legacy(name: str, profile: dict[str, Any]) -> dict[str, Any]:
             slot=app.get("slot", "full"),
             args=list(app.get("args", [])),
             play=bool(app.get("play", False)),
+            background=bool(app.get("background", False)),
         )
         results.append(actions.launch(spec))
 

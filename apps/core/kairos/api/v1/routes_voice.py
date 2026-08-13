@@ -78,7 +78,7 @@ async def transcribe(
 
 
 @router.post("/speak")
-async def speak(body: SpeakIn, request: Request, user: CurrentUser) -> Response:
+async def speak(body: SpeakIn, request: Request, user: MachineOrUser) -> Response:
     """Sintetiza una frase. El cliente pide frase a frase mientras genera."""
     agent = request.app.state.core.registry.find("voice.speak")
     result = await agent.handle(
