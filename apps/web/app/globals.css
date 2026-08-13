@@ -1058,33 +1058,19 @@ body::before {
 .idle-slow,
 .idle-slower,
 .idle-drift,
-.idle-inner {
-  transform-origin: 200px 200px;
-  animation-play-state: paused;
-}
 
-.sigil[data-alive] .idle-slow { animation: idle-cw 150s linear infinite; }
-.sigil[data-alive] .idle-slower { animation: idle-ccw 210s linear infinite; }
-.sigil[data-alive] .idle-drift { animation: idle-cw 320s linear infinite; }
-.sigil[data-alive] .idle-inner { animation: idle-ccw 95s linear infinite; }
 
 .sigil[data-alive] .idle-slow,
 .sigil[data-alive] .idle-slower,
 .sigil[data-alive] .idle-drift,
-.sigil[data-alive] .idle-inner { animation-play-state: running; }
 
 /* Al generar, el sistema se acelera: mismo movimiento, cuatro veces más vivo. */
-.sigil[data-busy][data-alive] .idle-slow { animation-duration: 38s; }
-.sigil[data-busy][data-alive] .idle-slower { animation-duration: 52s; }
-.sigil[data-busy][data-alive] .idle-inner { animation-duration: 24s; }
 
 @keyframes idle-cw { to { transform: rotate(360deg); } }
 @keyframes idle-ccw { to { transform: rotate(-360deg); } }
 
 /* --- respiración: el pulso del sistema ------------------------------------ */
 
-.sigil[data-alive] .ring-agents { animation: agents-breathe 6s ease-in-out infinite; }
-.sigil[data-alive] .segments { animation: segments-breathe 8s ease-in-out infinite; }
 
 @keyframes agents-breathe {
   50% { opacity: 0.62; }
@@ -1106,21 +1092,10 @@ body::before {
    El rango util para "vivo pero no molesto" esta entre 25 y 90 s.
    ========================================================================== */
 
-.sigil[data-alive] .idle-slow    { animation: idle-cw  46s linear infinite; }
-.sigil[data-alive] .idle-slower  { animation: idle-ccw 68s linear infinite; }
-.sigil[data-alive] .idle-drift   { animation: idle-cw  92s linear infinite; }
-.sigil[data-alive] .idle-inner   { animation: idle-ccw 27s linear infinite; }
 
 /* Al generar, el sistema se acelera de forma inconfundible. */
-.sigil[data-busy][data-alive] .idle-slow   { animation-duration: 9s; }
-.sigil[data-busy][data-alive] .idle-slower { animation-duration: 13s; }
-.sigil[data-busy][data-alive] .idle-drift  { animation-duration: 18s; }
-.sigil[data-busy][data-alive] .idle-inner  { animation-duration: 5s; }
 
 /* Respiración más marcada: es el pulso, tiene que verse. */
-.sigil[data-alive] .ring-agents { animation: agents-breathe 4.2s ease-in-out infinite; }
-.sigil[data-alive] .segments    { animation: segments-breathe 5.5s ease-in-out infinite; }
-.sigil[data-alive] .core-halo   { animation: halo-breathe 3.4s ease-in-out infinite; }
 
 @keyframes agents-breathe   { 50% { opacity: 0.42; } }
 @keyframes segments-breathe { 50% { opacity: 0.55; } }
@@ -1147,13 +1122,10 @@ body::before {
    ========================================================================== */
 
 @media (prefers-reduced-motion: reduce) {
-  html:not([data-motion="on"]) .sigil * { animation: none !important; }
-}
+  html:not([data-motion="on"]) }
 
-html[data-motion="off"] .sigil * { animation: none !important; }
-
+html[data-motion="off"] 
 /* El núcleo caído congela todo, siempre. Sigue siendo información. */
-.sigil:not([data-alive]) * { animation: none !important; }
 
 .motion-toggle {
   padding: 0.3rem 0.6rem !important;
