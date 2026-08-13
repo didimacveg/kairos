@@ -41,7 +41,7 @@ from typing import Any
 
 import httpx
 import uvicorn
-from fastapi import Depends, FastAPI, Header, HTTPException, status
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
 from pydantic import BaseModel
 
 import actions
@@ -52,7 +52,15 @@ from listener import WakeListener
 
 CONFIG_PATH = Path(os.getenv("KAIROS_BRIDGE_CONFIG", "bridge-config.json"))
 SECRET_PATH = Path(os.getenv("KAIROS_BRIDGE_SECRET", ".bridge-secret"))
-HOST, PORT = "127.0.0.1", int(os.getenv("KAIROS_BRIDGE_PORT", "8200"))
+# Escucha en todas las interfaces PERO filtra por IP de origen (ver
+# `solo_origen_confiable`). Ligar a 127.0.0.1 dejaba fuera al contenedor del
+# nucleo: Docker Desktop llega desde su propia subred, no desde loopback.
+HOST, PORT = "0.0.0.0", int(os.getenv("KAIROS_BRIDGE_PORT", "8200"))
+
+# Loopback de Windows, y los rangos privados que usan Docker Desktop y WSL2.
+# Cualquier otra IP —incluido otro equipo de tu WiFi— recibe 403 antes de que
+# se mire siquiera el token.
+ORIGENES_PERMITIDOS = ("127.", "::1", "10.", "172.", "192.168.")
 CORE_URL = os.getenv("KAIROS_CORE_URL", "http://127.0.0.1:8000")
 
 
@@ -120,7 +128,22 @@ def get_secret() -> str:
 SECRET = get_secret()
 
 
-def authorize(x_bridge_token: str = Header(default="")) -> None:
+def solo_origen_confiable(request: Request) -> None:
+    """Primera barrera: de donde viene la peticion.
+
+    Se comprueba ANTES que el token, a proposito: una IP desconocida no
+    merece siquiera que le validemos credenciales.
+    """
+    cliente = request.client.host if request.client else ""
+    if not any(cliente.startswith(p) for p in ORIGENES_PERMITIDOS):
+        print(f"[bridge] rechazado origen {cliente}")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Origen no permitido")
+
+
+def authorize(
+    request: Request, x_bridge_token: str = Header(default="")
+) -> None:
+    solo_origen_confiable(request)
     if not secrets.compare_digest(x_bridge_token, SECRET):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Token invalido")
 
@@ -233,7 +256,8 @@ class WindowRequest(BaseModel):
 
 
 @app.get("/health")
-async def health() -> dict[str, Any]:
+async def health(request: Request) -> dict[str, Any]:
+    solo_origen_confiable(request)
     return {
         "status": "ok",
         "perfiles": sorted(config.profiles),
@@ -296,7 +320,28 @@ def transcribe_and_dispatch(audio: bytes) -> None:
     dispatch(text)
 
 
-def dispatch(text: str) -> None:
+def classify_intent(text: str) -> dict:
+    """Pregunta al nucleo que quiso decir el usuario.
+
+    El nucleo devuelve una accion de una lista CERRADA y validada alli. Si
+    falla la red o el modelo, devuelve conversar: no tocar nada es el modo
+    seguro.
+    """
+    try:
+        with httpx.Client(timeout=25) as client:
+            response = client.post(
+                f"{CORE_URL}/api/v1/intent",
+                json={"text": text, "profiles": sorted(config.profiles)},
+                headers=_core_headers(),
+            )
+        if response.status_code != 200:
+            return {"accion": "conversar"}
+        return response.json()
+    except httpx.HTTPError:
+        return {"accion": "conversar"}
+
+
+def dispatch(text: str) -> bool:
     """Traduce voz a accion sobre perfiles.
 
     Si no encaja con ningun patron, NO se toca el escritorio. Es la garantia
@@ -305,15 +350,54 @@ def dispatch(text: str) -> None:
     command = commands.parse(text, config.phrases)
 
     if command.kind == "none":
-        print(f"[bridge] no es una orden de perfil: {text!r}")
-        return
+        # Los patrones fijos son la via rapida (0 ms, sin red). Cuando no
+        # encajan —titubeos, sinonimos, frases raras— pregunta al modelo, que
+        # elige de la misma lista cerrada. Se gana comprension sin ampliar ni
+        # un milimetro lo que el sistema puede hacer.
+        intent = classify_intent(text)
+        accion = intent.get("accion", "conversar")
+        print(f"[bridge] intencion: {accion}")
+
+        if accion == "conversar":
+            print(f"[bridge] no es una orden: {text!r}")
+            return False
+
+        equivalencias = {
+            "abrir_perfil": lambda: run_profile(intent["perfil"]),
+            "cerrar_perfil": lambda: close_profile(intent["perfil"]),
+            "pausar_musica": music.pause,
+            "reanudar_musica": music.resume,
+            "siguiente_cancion": music.next_track,
+            "cancion_anterior": music.previous_track,
+            "que_suena": music.now_playing,
+            "subir_volumen": lambda: music.set_volume(80),
+            "bajar_volumen": lambda: music.set_volume(30),
+            "poner_volumen": lambda: music.set_volume(intent.get("porcentaje", 50)),
+            "poner_musica": lambda: music.search_and_play(intent["consulta"]),
+        }
+
+        if accion == "cambiar_perfil":
+            anterior = intent.get("perfil_anterior")
+            if anterior:
+                print(f"[bridge] {close_profile(anterior)}")
+            print(f"[bridge] {run_profile(intent['perfil'])}")
+            return True
+
+        accion_fn = equivalencias.get(accion)
+        if accion_fn is None:
+            return False
+        resultado = accion_fn()
+        print(f"[bridge] {resultado}")
+        if accion in {"poner_musica", "que_suena"} and isinstance(resultado, str):
+            speech.say(f"Suena {resultado}." if "de " in resultado else resultado, SECRET)
+        return True
 
     # --- musica ---
     if command.kind == "play":
         resultado = music.search_and_play(command.name)
         print(f"[musica] {resultado}")
         speech.say(f"Reproduciendo {resultado}." if "de " in resultado else resultado, SECRET)
-        return
+        return True
     if command.kind in {"pause", "resume", "next", "prev", "now"}:
         accion = {
             "pause": music.pause, "resume": music.resume,
@@ -324,22 +408,23 @@ def dispatch(text: str) -> None:
         print(f"[musica] {resultado}")
         if command.kind == "now":
             speech.say(f"Suena {resultado}.", SECRET)
-        return
+        return True
     if command.kind == "volume":
         print(f"[musica] {music.set_volume(int(command.name))}")
-        return
+        return True
 
     if command.kind == "switch":
         print(f"[bridge] cerrando {command.other} y abriendo {command.name}")
         print(f"[bridge] {close_profile(command.other)}")
         print(f"[bridge] {run_profile(command.name)}")
-        return
+        return True
 
     if command.kind == "close":
         print(f"[bridge] {close_profile(command.name)}")
-        return
+        return True
 
     print(f"[bridge] {run_profile(command.name)}")
+    return True
 
 
 def _core_headers() -> dict[str, str]:
@@ -390,6 +475,22 @@ def start_hotkey() -> None:
     print(f"[bridge] atajo global: {combo}")
 
 
+def _quit(icon=None, item=None) -> None:
+    """Cierra el puente entero.
+
+    `icon.stop()` solo quitaba el icono: el servidor y la escucha seguian
+    vivos y habia que matarlos a mano. os._exit se salta los hilos demonio,
+    que es exactamente lo que hace falta aqui.
+    """
+    print("[bridge] cerrando")
+    if icon is not None:
+        try:
+            icon.stop()
+        except Exception:  # noqa: BLE001
+            pass
+    os._exit(0)
+
+
 def start_tray() -> None:
     try:
         from PIL import Image, ImageDraw
@@ -412,7 +513,7 @@ def start_tray() -> None:
             yield pystray.MenuItem(f"Cerrar: {name}",
                                    lambda _, n=name: close_profile(n))
         yield pystray.MenuItem("Recargar configuración", lambda: config.load())
-        yield pystray.MenuItem("Salir", lambda icon: icon.stop())
+        yield pystray.MenuItem("Salir", _quit)
 
     icon = pystray.Icon("kairos", image, "KAIROS Bridge", pystray.Menu(items))
     threading.Thread(target=icon.run, daemon=True).start()
@@ -464,7 +565,7 @@ def main() -> None:
     start_hotkey()
     start_tray()
     start_listening()
-    print(f"[bridge] escuchando en http://{HOST}:{PORT} (solo loopback)")
+    print(f"[bridge] escuchando en {HOST}:{PORT} (origenes locales y Docker)")
     uvicorn.run(app, host=HOST, port=PORT, log_level="warning")
 
 

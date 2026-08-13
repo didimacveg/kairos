@@ -28,6 +28,11 @@ LANGUAGE = os.getenv("KAIROS_WHISPER_LANGUAGE", "es")
 MAX_AUDIO_BYTES = int(os.getenv("KAIROS_MAX_AUDIO_BYTES", str(25 * 1024 * 1024)))
 
 PIPER_VOICE = os.getenv("KAIROS_PIPER_VOICE", "es_ES-sharvard-medium")
+# Segunda voz para el ingles. Un modelo de Piper contiene SOLO los fonemas de
+# su idioma: la voz espanola no puede pronunciar "Bye Bye Bye" porque esos
+# sonidos no existen en su repertorio, y lo lee como si fuera espanol. No es
+# un ajuste que se pueda corregir; hace falta otro modelo.
+PIPER_VOICE_EN = os.getenv("KAIROS_PIPER_VOICE_EN", "en_US-ryan-medium")
 PIPER_DIR = Path(os.getenv("KAIROS_PIPER_DIR", "/var/lib/kairos/voices"))
 # length_scale > 1 = habla mas despacio. Una diccion algo mas lenta se lee
 # como deliberada; acelerada suena a ardilla.
@@ -55,6 +60,7 @@ INITIAL_PROMPT = os.getenv(
 
 _whisper: Any = None
 _piper: Any = None
+_piper_en: Any = None
 
 
 class Transcription(BaseModel):
@@ -84,28 +90,32 @@ def _load_whisper() -> Any:
         return WhisperModel(MODEL_SIZE, device="cpu", compute_type="int8")
 
 
-def _load_piper() -> Any:
+def _load_voice(name: str) -> Any:
     """Si falta el modelo, el servicio sigue vivo: KAIROS puede escuchar
-    aunque no pueda hablar."""
+    aunque no pueda hablar, y hablar espanol aunque no tenga voz inglesa."""
     try:
         from piper import PiperVoice
 
-        onnx = PIPER_DIR / f"{PIPER_VOICE}.onnx"
+        onnx = PIPER_DIR / f"{name}.onnx"
         if not onnx.exists():
+            print(f"[voz] falta el modelo {name}")
             return None
         return PiperVoice.load(str(onnx), config_path=str(onnx.with_suffix(".onnx.json")))
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
+        print(f"[voz] no se pudo cargar {name}: {exc}")
         return None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    global _whisper, _piper
+    global _whisper, _piper, _piper_en
     _whisper = _load_whisper()
-    _piper = _load_piper()
+    _piper = _load_voice(PIPER_VOICE)
+    _piper_en = _load_voice(PIPER_VOICE_EN)
     yield
     _whisper = None
     _piper = None
+    _piper_en = None
 
 
 app = FastAPI(title="KAIROS Voice", version="0.3.0", lifespan=lifespan)
@@ -120,6 +130,7 @@ async def health() -> dict[str, Any]:
         "compute_type": COMPUTE_TYPE,
         "speech": "ok" if _piper is not None else "unavailable",
         "voice": PIPER_VOICE,
+        "voice_en": PIPER_VOICE_EN if _piper_en else None,
         "pitch": PIPER_PITCH,
         "length_scale": PIPER_LENGTH,
     }
@@ -176,7 +187,7 @@ async def transcribe(audio: UploadFile = File(...)) -> Transcription:
     )
 
 
-def _synthesize(text: str, wav: Any) -> None:
+def _synthesize(text: str, wav: Any, voice: Any = None, first: bool = True) -> None:
     """Sintetiza en un WAV abierto, sea cual sea la version de piper-tts.
 
     La API cambio entre versiones: unas fijan los parametros del WAV, otras
@@ -184,21 +195,25 @@ def _synthesize(text: str, wav: Any) -> None:
     de escribir. Se prueban las tres en orden en lugar de fijar una version en
     requirements: el servicio debe sobrevivir a que la dependencia se actualice.
     """
-    rate = int(getattr(getattr(_piper, "config", None), "sample_rate", 22050))
+    engine = voice if voice is not None else _piper
+    rate = int(getattr(getattr(engine, "config", None), "sample_rate", 22050))
     playback = max(8000, int(rate * PIPER_PITCH))
 
-    if hasattr(_piper, "synthesize_wav"):
-        _piper.synthesize_wav(text, wav)
+    if hasattr(engine, "synthesize_wav"):
+        engine.synthesize_wav(text, wav)
         return
 
-    wav.setnchannels(1)
-    wav.setsampwidth(2)
-    wav.setframerate(playback)
+    # Los parametros del WAV se fijan una sola vez: los tramos siguientes solo
+    # anaden muestras.
+    if first:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(playback)
 
     try:
-        result = _piper.synthesize(text, wav, length_scale=PIPER_LENGTH)
+        result = engine.synthesize(text, wav, length_scale=PIPER_LENGTH)
     except TypeError:
-        result = _piper.synthesize(text, wav)
+        result = engine.synthesize(text, wav)
 
     if result is not None:
         for chunk in result:
@@ -219,6 +234,56 @@ def _clean(text: str) -> str:
     cleaned = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", cleaned)
     cleaned = re.sub(r"\s+", " ", cleaned)
     return cleaned.strip()
+
+
+# Palabras castellanas muy frecuentes. Su presencia es mejor senal que la de
+# palabras inglesas: "Bye Bye Bye" no tiene ninguna, pero "Reproduciendo Bye
+# Bye Bye" si, y hay que partir la frase en dos tramos.
+ES_HINTS = re.compile(
+    r"\b(el|la|los|las|de|del|que|con|para|por|una|un|es|esta|tu|te|se|"
+    r"reproduciendo|suena|modo|perfil|abriendo|cerrando|bienvenido)\b",
+    re.I,
+)
+EN_ISH = re.compile(r"^[a-zA-Z0-9 '\-&.,!?]+$")
+
+
+def _looks_english(fragment: str) -> bool:
+    """Heuristica barata: sin acentos, sin enes, y sin palabras castellanas.
+
+    No es deteccion de idioma de verdad, y no hace falta: el caso real es
+    "titulo de cancion en ingles dentro de una frase en espanol".
+    """
+    text = fragment.strip()
+    if len(text) < 3:
+        return False
+    if any(c in text for c in "áéíóúüñÁÉÍÓÚÑ¿¡"):
+        return False
+    if ES_HINTS.search(text):
+        return False
+    return bool(EN_ISH.match(text))
+
+
+def _split_by_language(text: str) -> list[tuple[str, bool]]:
+    """Parte la frase en tramos, marcando cuales van en ingles.
+
+    Se corta por comas y por " de ", que es donde suele estar la frontera:
+    "Reproduciendo Bye Bye Bye de NSYNC" -> [es] Reproduciendo, [en] Bye Bye
+    Bye, [es] de, [en] NSYNC.
+    """
+    piezas = re.split(r"(,|\s+de\s+|\.\s+)", text)
+    tramos: list[tuple[str, bool]] = []
+    for pieza in piezas:
+        limpio = pieza.strip()
+        if not limpio:
+            continue
+        ingles = _looks_english(limpio)
+        # Fusiona tramos consecutivos del mismo idioma: menos cortes, menos
+        # pausas artificiales al reproducir.
+        if tramos and tramos[-1][1] == ingles:
+            tramos[-1] = (f"{tramos[-1][0]} {limpio}", ingles)
+        else:
+            tramos.append((limpio, ingles))
+    return tramos or [(text, False)]
 
 
 @app.post("/speak")
@@ -246,10 +311,15 @@ async def speak(body: SpeechRequest) -> Response:
             wav.setframerate(22050)
         return Response(content=empty.getvalue(), media_type="audio/wav")
 
+    # Un solo WAV con todos los tramos concatenados: el cliente recibe un
+    # audio, no cinco, y no hay huecos entre trozos.
     buffer = io.BytesIO()
     try:
         with wave.open(buffer, "wb") as wav:
-            _synthesize(text, wav)
+            tramos = _split_by_language(text) if _piper_en else [(text, False)]
+            for i, (fragmento, en_ingles) in enumerate(tramos):
+                voz = _piper_en if (en_ingles and _piper_en) else _piper
+                _synthesize(fragmento, wav, voice=voz, first=(i == 0))
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY, f"No se pudo sintetizar: {exc}"

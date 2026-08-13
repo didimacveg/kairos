@@ -1,11 +1,19 @@
-"""Interpretacion de ordenes de voz sobre perfiles.
+"""Interpretacion de ordenes de voz: SOLO PATRONES INEQUIVOCOS.
 
-Deliberadamente NO usa el modelo de lenguaje. Son cuatro patrones fijos, y esa
-es la garantia: un modelo puede alucinar "cierra el perfil trabajo" a partir
-de una conversacion cualquiera; una expresion regular sobre tu voz, no.
+Esta es la via rapida: 0 ms, sin red. Todo lo que no encaje aqui pasa al
+clasificador de intencion del nucleo, que entiende lenguaje natural.
 
-Todo lo que no encaje con estos patrones se manda al nucleo como conversacion
-normal, sin tocar el escritorio.
+Leccion aprendida en uso real: "ponme el rollo ese de estudiar" encajaba con
+el patron de musica y KAIROS puso una cancion en vez de abrir el perfil de
+estudio. Un patron demasiado goloso hace algo INCORRECTO; uno que no encaja
+solo cede el turno al modelo, que entiende mejor. Ante la duda, no encajar.
+
+Por eso "pon X" ya no esta aqui: es la construccion mas ambigua del espanol.
+Los perfiles y las ordenes de transporte, que si son inequivocas, se quedan.
+
+Y nada de esto pasa por el modelo: un LLM puede alucinar "cierra el perfil
+trabajo" a partir de una conversacion cualquiera; una expresion regular sobre
+tu voz, no.
 """
 from __future__ import annotations
 
@@ -22,48 +30,39 @@ def normalize(text: str) -> str:
 
 
 OPEN = re.compile(
-    r"\b(abre|abrir|ejecuta|ejecutar|activa|activar|lanza|pon|inicia)\b"
-    r".{0,20}?\bperfil\b\s+(?:de\s+)?(?P<name>[a-z]+)"
+    r"\b(abre|abrir|ejecuta|ejecutar|activa|activar|lanza|inicia|entra en)\b"
+    r".{0,20}?\b(perfil|modo)\b\s+(?:de\s+)?(?P<name>[a-z]+)"
 )
 CLOSE = re.compile(
-    r"\b(cierra|cerrar|apaga|apagar|termina|desactiva|quita)\b"
-    r".{0,20}?\bperfil\b\s+(?:de\s+)?(?P<name>[a-z]+)"
+    r"\b(cierra|cerrar|apaga|apagar|termina|desactiva|quita|sal de)\b"
+    r".{0,20}?\b(perfil|modo)\b\s+(?:de\s+)?(?P<name>[a-z]+)"
 )
 SWITCH = re.compile(
-    r"\bcierra\b.{0,20}?\bperfil\b\s+(?:de\s+)?(?P<from>[a-z]+)"
-    r".{0,20}?\babre\b.{0,20}?\bperfil\b\s+(?:de\s+)?(?P<to>[a-z]+)"
+    r"\b(cierra|sal de)\b.{0,20}?\b(perfil|modo)\b\s+(?:de\s+)?(?P<from>[a-z]+)"
+    r".{0,25}?\b(abre|entra en)\b.{0,20}?\b(perfil|modo)\b\s+(?:de\s+)?(?P<to>[a-z]+)"
 )
 
-
-# --- musica ---------------------------------------------------------------
-# Igual que los perfiles: patrones fijos, no el modelo. "Pausa la musica" no
-# puede salir de una alucinacion.
-PLAY = re.compile(
-    r"\b(pon|ponme|reproduce|escuchar|suena|dale a)\b\s+(?P<query>.{2,80})"
-)
-# El objeto es OBLIGATORIO. Sin el, "para" —una de las palabras mas comunes
-# del espanol— convertia media conversacion en una orden de pausa.
+# Transporte: inequivoco porque exige el objeto explicito.
 PAUSE = re.compile(
     r"\b(pausa|pausar|para|parar|deten|detener|silencia|quita)\b"
     r"\s+(la\s+|el\s+)?(musica|cancion|spotify|sonido)\b"
 )
-RESUME = re.compile(r"\b(reanuda|continua|sigue|quita la pausa)\b")
-NEXT = re.compile(r"\b(siguiente|pasa|salta|otra)\b.{0,12}\bcancion\b|\bsiguiente cancion\b")
-PREV = re.compile(r"\b(anterior|atras|vuelve)\b.{0,12}\bcancion\b")
-VOLUME = re.compile(r"\bvolumen\b.{0,12}?(?P<pct>\d{1,3})|\b(sube|baja)\b.{0,12}\bvolumen\b")
-NOW = re.compile(r"\bque\b.{0,12}\b(suena|esta sonando|cancion es)\b")
+RESUME = re.compile(r"\b(reanuda|continua|quita la pausa)\b")
+NEXT = re.compile(r"\b(siguiente|otra)\s+(cancion|tema)\b|\bpasa de cancion\b")
+PREV = re.compile(r"\b(anterior|previa)\s+cancion\b|\bcancion anterior\b")
+NOW = re.compile(r"\bque\b.{0,15}\b(suena|esta sonando|cancion es)\b")
 
 
 @dataclass
 class Command:
-    kind: str  # open | close | switch | phrase | play | pause | resume
-               # | next | prev | volume | now | none
+    kind: str  # open | close | switch | phrase | pause | resume | next
+               # | prev | now | none
     name: str = ""
     other: str = ""
 
 
 def parse(text: str, phrases: dict[str, str]) -> Command:
-    """Traduce voz a una orden sobre perfiles. `none` = no es una orden."""
+    """Traduce voz a una orden. `none` = que lo decida el modelo."""
     clean = normalize(text)
 
     # Las frases declaradas ganan: son las que tu has escrito.
@@ -78,14 +77,8 @@ def parse(text: str, phrases: dict[str, str]) -> Command:
     if (m := OPEN.search(clean)) is not None:
         return Command(kind="open", name=m.group("name"))
 
-    # --- musica ---
     if NOW.search(clean):
         return Command(kind="now")
-    if (m := VOLUME.search(clean)) is not None:
-        pct = m.group("pct")
-        if pct:
-            return Command(kind="volume", name=pct)
-        return Command(kind="volume", name="80" if "sube" in clean else "30")
     if NEXT.search(clean):
         return Command(kind="next")
     if PREV.search(clean):
@@ -94,11 +87,6 @@ def parse(text: str, phrases: dict[str, str]) -> Command:
         return Command(kind="resume")
     if PAUSE.search(clean):
         return Command(kind="pause")
-    if (m := PLAY.search(clean)) is not None:
-        query = m.group("query").strip()
-        # "pon el perfil trabajo" ya lo habria cogido OPEN; si llega aqui con
-        # "perfil" dentro es ruido de transcripcion, no una cancion.
-        if "perfil" not in query:
-            return Command(kind="play", name=query)
 
+    # "pon X" NO se resuelve aqui. Demasiado ambiguo: lo decide el modelo.
     return Command(kind="none")

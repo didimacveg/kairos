@@ -26,6 +26,14 @@ RUN groupadd --gid 10002 kairos && \
 #   sharvard  masculina, timbre mas grave y sobrio  (por defecto)
 #   davefx    masculina, mas clara y neutra
 ARG PIPER_BASE=https://huggingface.co/rhasspy/piper-voices/resolve/main/es/es_ES
+ARG PIPER_EN=https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US
+# Voz inglesa: un modelo de Piper solo contiene los fonemas de su idioma, asi
+# que la voz espanola no puede pronunciar titulos en ingles.
+RUN set -e; \
+    curl -fsSL "${PIPER_EN}/ryan/medium/en_US-ryan-medium.onnx" \
+        -o /var/lib/kairos/voices/en_US-ryan-medium.onnx; \
+    curl -fsSL "${PIPER_EN}/ryan/medium/en_US-ryan-medium.onnx.json" \
+        -o /var/lib/kairos/voices/en_US-ryan-medium.onnx.json
 RUN set -e; \
     for v in "sharvard/medium/es_ES-sharvard-medium" "davefx/medium/es_ES-davefx-medium"; do \
         name=$(basename "$v"); \

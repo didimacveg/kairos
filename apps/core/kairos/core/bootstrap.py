@@ -14,6 +14,7 @@ from kairos.agents.reasoning.providers.ollama import OllamaProvider
 from kairos.agents.registry import AgentRegistry
 from kairos.agents.search.agent import SearchAgent
 from kairos.agents.device.agent import DeviceAgent
+from kairos.agents.intent.agent import IntentAgent
 from kairos.agents.voice.agent import VoiceAgent
 from kairos.config import get_settings
 from kairos.core.orchestrator import KairosCore
@@ -63,6 +64,7 @@ def build_core() -> KairosCore:
     registry.register(MemoryAgent(embedder=embedder, extractor=FactExtractor(embedder)))
     registry.register(ReasoningAgent(provider=provider))
     registry.register(VoiceAgent())
+    registry.register(IntentAgent(provider=provider))
     if settings.search_enabled:
         registry.register(SearchAgent())
     # El puente es opt-in: sin token declarado, el agente ni se registra.
