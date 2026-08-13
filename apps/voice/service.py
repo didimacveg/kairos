@@ -43,6 +43,16 @@ MAX_SPEECH_CHARS = 2000
 # seguro esta de lo que ha oido. -0.9 marca la frontera entre entender y adivinar.
 LOW_CONFIDENCE = float(os.getenv("KAIROS_WHISPER_MIN_LOGPROB", "-0.9"))
 
+# Whisper transcribe hacia palabras que conoce: "KAIROS" no existe en espanol
+# y acaba como "chairos" o "gairos". El initial_prompt le da contexto de que
+# vocabulario esperar en este dominio, sin forzar nada.
+INITIAL_PROMPT = os.getenv(
+    "KAIROS_WHISPER_PROMPT",
+    "KAIROS. Ordenes para KAIROS: abre el perfil trabajo, estudio o juego. "
+    "Cierra el perfil. Pon musica, pausa la musica, siguiente cancion, "
+    "volumen. Spotify, Discord, Valorant, Roblox, Visual Studio Code.",
+)
+
 _whisper: Any = None
 _piper: Any = None
 
@@ -137,6 +147,7 @@ async def transcribe(audio: UploadFile = File(...)) -> Transcription:
                 vad_filter=True,
                 vad_parameters={"min_silence_duration_ms": 400},
                 beam_size=5,
+                initial_prompt=INITIAL_PROMPT,
             )
             collected = list(segments)
         except Exception as exc:  # noqa: BLE001

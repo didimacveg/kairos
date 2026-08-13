@@ -47,6 +47,7 @@ from pydantic import BaseModel
 import actions
 import commands
 import speech
+from spotify import Spotify
 from listener import WakeListener
 
 CONFIG_PATH = Path(os.getenv("KAIROS_BRIDGE_CONFIG", "bridge-config.json"))
@@ -103,6 +104,7 @@ class Config:
 
 
 config = Config(CONFIG_PATH)
+music = Spotify()
 
 
 def get_secret() -> str:
@@ -154,7 +156,16 @@ def run_profile(name: str) -> dict[str, Any]:
         threading.Thread(target=speech.say, args=(frase, SECRET), daemon=False).start()
         time.sleep(0.2)
 
-    results = [actions.launch(spec) for spec in _specs(entry)]
+    results = []
+    for spec in _specs(entry):
+        results.append(actions.launch(spec))
+        # Si el perfil declara una cancion y Spotify esta autorizado, se
+        # reproduce por API: es la unica forma de garantizar que empieza por
+        # el principio y que suena LA cancion pedida, no la anterior.
+        if spec.play and spec.launch.startswith("spotify:track:") and music.configured:
+            track_id = spec.launch.split(":")[-1]
+            time.sleep(1.5)
+            results.append(f"Spotify: {music.play_track(track_id)}")
 
     # Una cadena puede encadenar con un perfil: "papi esta en casa" pone la
     # cancion y despues abre trabajo.
@@ -228,6 +239,7 @@ async def health() -> dict[str, Any]:
         "perfiles": sorted(config.profiles),
         "frases": sorted(config.phrases),
         "escritorio": actions.describe_desktop(),
+        "spotify": "autorizado" if music.configured else "sin autorizar",
     }
 
 
@@ -294,6 +306,27 @@ def dispatch(text: str) -> None:
 
     if command.kind == "none":
         print(f"[bridge] no es una orden de perfil: {text!r}")
+        return
+
+    # --- musica ---
+    if command.kind == "play":
+        resultado = music.search_and_play(command.name)
+        print(f"[musica] {resultado}")
+        speech.say(f"Reproduciendo {resultado}." if "de " in resultado else resultado, SECRET)
+        return
+    if command.kind in {"pause", "resume", "next", "prev", "now"}:
+        accion = {
+            "pause": music.pause, "resume": music.resume,
+            "next": music.next_track, "prev": music.previous_track,
+            "now": music.now_playing,
+        }[command.kind]
+        resultado = accion()
+        print(f"[musica] {resultado}")
+        if command.kind == "now":
+            speech.say(f"Suena {resultado}.", SECRET)
+        return
+    if command.kind == "volume":
+        print(f"[musica] {music.set_volume(int(command.name))}")
         return
 
     if command.kind == "switch":

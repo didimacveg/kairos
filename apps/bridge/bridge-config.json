@@ -4,7 +4,15 @@
     "kairos",
     "cairos",
     "kairo",
-    "cairo"
+    "cairo",
+    "chairos",
+    "gairos",
+    "kairox",
+    "cairox",
+    "kayros",
+    "kaidos",
+    "cairus",
+    "kairus"
   ],
   "always_listening": true,
   "_como_conseguir_las_canciones": [
@@ -31,35 +39,40 @@
           "window": "Spotify",
           "monitor": "secundario",
           "slot": "full",
-          "play": true
+          "play": true,
+          "background": false
         },
         {
           "name": "Aula Virtual",
           "launch": "https://aulavirtual.educa.madrid.org",
           "window": "Aula",
           "monitor": "principal",
-          "slot": "left"
+          "slot": "full",
+          "background": false
         },
         {
           "name": "Correo",
           "launch": "https://mail.google.com",
           "window": "Gmail",
           "monitor": "principal",
-          "slot": "right"
+          "slot": "full",
+          "background": false
         },
         {
           "name": "Calendar",
           "launch": "https://calendar.google.com",
           "window": "Calendar",
           "monitor": "principal",
-          "slot": "bottom-left"
+          "slot": "full",
+          "background": false
         },
         {
           "name": "YouTube",
           "launch": "https://youtube.com",
           "window": "YouTube",
           "monitor": "principal",
-          "slot": "bottom-right"
+          "slot": "full",
+          "background": false
         }
       ],
       "say_close": "Cierro el perfil de estudio. Buen trabajo."
@@ -73,7 +86,8 @@
           "window": "Spotify",
           "monitor": "secundario",
           "slot": "full",
-          "play": true
+          "play": true,
+          "background": false
         },
         {
           "name": "VS Code",
@@ -85,14 +99,14 @@
           ],
           "window": "Visual Studio Code",
           "monitor": "principal",
-          "slot": "left"
+          "slot": "full",
+          "background": false
         },
         {
           "name": "Docker Desktop",
           "launch": "Docker Desktop",
           "window": "Docker Desktop",
           "monitor": "principal",
-          "slot": "right",
           "background": true
         },
         {
@@ -100,7 +114,8 @@
           "launch": "http://localhost:3000",
           "window": "KAIROS",
           "monitor": "principal",
-          "slot": "bottom-right"
+          "slot": "full",
+          "background": false
         }
       ],
       "say_close": "Cerrando el modo trabajo."
@@ -114,14 +129,16 @@
           "window": "Spotify",
           "monitor": "secundario",
           "slot": "full",
-          "play": true
+          "play": true,
+          "background": false
         },
         {
           "name": "Discord",
           "launch": "discord:",
           "window": "Discord",
           "monitor": "secundario",
-          "slot": "bottom-right"
+          "slot": "full",
+          "background": false
         },
         {
           "name": "Valorant",
@@ -132,14 +149,16 @@
           ],
           "window": "VALORANT",
           "monitor": "principal",
-          "slot": "full"
+          "slot": "full",
+          "background": false
         },
         {
           "name": "Roblox",
           "launch": "roblox:",
           "window": "Roblox",
           "monitor": "principal",
-          "slot": "full"
+          "slot": "full",
+          "background": false
         }
       ],
       "say_close": "Cerrando el modo juego."
@@ -161,7 +180,8 @@
           "window": "Spotify",
           "monitor": "secundario",
           "slot": "full",
-          "play": true
+          "play": true,
+          "background": false
         }
       ]
     }

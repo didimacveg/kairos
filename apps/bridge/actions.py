@@ -216,7 +216,10 @@ def launch(spec: AppSpec) -> str:
         if monitors:
             place_window(hwnd, resolve_monitor(monitors, spec.monitor), spec.slot)
 
-    if spec.play and spec.window:
+    # Con la API de Spotify autorizada, la reproduccion la lleva ella;
+    # la tecla multimedia solo es el plan B.
+    API_MANAGED = spec.launch.startswith('spotify:track:')
+    if spec.play and spec.window and not API_MANAGED:
         return f"{spec.name} {action}, {ensure_playing(spec.window)}"
 
     return f"{spec.name} {action}"

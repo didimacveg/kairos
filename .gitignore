@@ -18,3 +18,7 @@ models/
 .DS_Store
 .vscode/
 !.vscode/extensions.json
+
+# Secretos del puente
+.spotify-auth.json
+.bridge-secret
