@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
+import asyncio
+from contextlib import asynccontextmanager, suppress
 from collections.abc import AsyncIterator
 
 from fastapi import FastAPI
@@ -21,6 +22,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     log = get_logger("kairos.main")
     await create_schema()
     app.state.core = build_core()
+
+    # El informe diario corre en segundo plano durante toda la vida del
+    # proceso. Se cancela limpiamente al apagar.
+    from kairos.agents.briefing.scheduler import run_scheduler
+
+    tarea = asyncio.create_task(run_scheduler(app.state.core))
     log.info(
         "kairos.started",
         instance=settings.instance_name,
@@ -28,6 +35,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         chat_model=settings.chat_model,
     )
     yield
+
+    tarea.cancel()
+    with suppress(asyncio.CancelledError):
+        await tarea
 
 
 def create_app() -> FastAPI:

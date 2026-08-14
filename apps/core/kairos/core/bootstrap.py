@@ -13,6 +13,7 @@ from kairos.agents.reasoning.providers.failover import FailoverProvider
 from kairos.agents.reasoning.providers.ollama import OllamaProvider
 from kairos.agents.registry import AgentRegistry
 from kairos.agents.search.agent import SearchAgent
+from kairos.agents.briefing.agent import BriefingAgent
 from kairos.agents.device.agent import DeviceAgent
 from kairos.agents.intent.agent import IntentAgent
 from kairos.agents.voice.agent import VoiceAgent
@@ -65,6 +66,7 @@ def build_core() -> KairosCore:
     registry.register(ReasoningAgent(provider=provider))
     registry.register(VoiceAgent())
     registry.register(IntentAgent(provider=provider))
+    registry.register(BriefingAgent(provider=provider, registry=registry))
     if settings.search_enabled:
         registry.register(SearchAgent())
     # El puente es opt-in: sin token declarado, el agente ni se registra.

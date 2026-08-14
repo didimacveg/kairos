@@ -266,6 +266,10 @@ class AppRequest(BaseModel):
     key: str
 
 
+class SayRequest(BaseModel):
+    text: str
+
+
 class MusicRequest(BaseModel):
     # Lista cerrada, igual que los perfiles: el nucleo pide una accion POR
     # NOMBRE, nunca una orden libre.
@@ -331,6 +335,21 @@ def open_app(key: str) -> dict[str, Any]:
 @app.post("/app", dependencies=[Depends(authorize)])
 async def app_open(body: AppRequest) -> dict[str, Any]:
     return open_app(body.key)
+
+
+@app.post("/say", dependencies=[Depends(authorize)])
+async def say_aloud(body: SayRequest) -> dict[str, Any]:
+    """El nucleo pide hablar. Se reproduce en los altavoces de esta maquina.
+
+    En hilo aparte para no bloquear la respuesta HTTP: un informe de cinco
+    frases tarda varios segundos en reproducirse y el nucleo no tiene por que
+    esperar a que termine.
+    """
+    texto = body.text.strip()
+    if not texto:
+        return {"ok": False, "error": "nada que decir"}
+    threading.Thread(target=speech.say, args=(texto, SECRET), daemon=False).start()
+    return {"ok": True, "result": f"reproduciendo {len(texto)} caracteres"}
 
 
 @app.post("/music", dependencies=[Depends(authorize)])

@@ -139,6 +139,27 @@ class MemoryItem(Base):
     )
 
 
+class Briefing(Base):
+    """Informe diario.
+
+    Se guarda ANTES de contarse en voz alta: si no estas delante a las 15:30,
+    el audio se pierde pero el texto espera en la interfaz. Un aviso que solo
+    existe mientras suena no es un aviso.
+    """
+
+    __tablename__ = "briefings"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    owner_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=True
+    )
+    content: Mapped[str] = mapped_column(Text)
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
+
+
 class AuditLog(Base):
     """Registro append-only de acciones con relevancia de seguridad."""
 

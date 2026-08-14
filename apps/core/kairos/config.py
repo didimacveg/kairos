@@ -58,6 +58,10 @@ class Settings(BaseSettings):
     bridge_url: str = Field("http://host.docker.internal:8200", alias="KAIROS_BRIDGE_URL")
     bridge_token: str = Field("", alias="KAIROS_BRIDGE_TOKEN")
     bridge_enabled: bool = Field(False, alias="KAIROS_BRIDGE_ENABLED")
+    briefing_enabled: bool = Field(True, alias="KAIROS_BRIEFING_ENABLED")
+    briefing_time: str = Field("15:30", alias="KAIROS_BRIEFING_TIME")
+    briefing_weekends: bool = Field(True, alias="KAIROS_BRIEFING_WEEKENDS")
+    briefing_city: str = Field("Madrid", alias="KAIROS_BRIEFING_CITY")
     anthropic_api_key: str | None = Field(None, alias="ANTHROPIC_API_KEY")
     openai_api_key: str | None = Field(None, alias="OPENAI_API_KEY")
 

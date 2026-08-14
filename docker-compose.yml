@@ -67,6 +67,9 @@ services:
       KAIROS_PIPER_LENGTH_SCALE: ${KAIROS_PIPER_LENGTH_SCALE:-1.08}
       KAIROS_WHISPER_MIN_LOGPROB: ${KAIROS_WHISPER_MIN_LOGPROB:--0.9}
     volumes:
+      # Sin esto, `restart voice` relanza la imagen construida y los
+      # cambios en disco no llegan nunca. Costo tres parches inutiles.
+      - ./apps/voice:/app:ro
       - whisper:/var/lib/kairos/models
     # Sin `ports`: solo accesible desde la red interna de Docker.
     # Sin GPU: Whisper corre en CPU para dejar la VRAM entera al modelo de

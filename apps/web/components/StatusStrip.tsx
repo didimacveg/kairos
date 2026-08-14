@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import type { Health } from "@/lib/api";
+import { Briefings } from "./Briefings";
 import { Sigil } from "./Sigil";
 
 /**
@@ -114,6 +115,7 @@ export function StatusStrip({
       </dl>
 
       <div className="identity">
+        <Briefings />
         <button
           type="button"
           className="motion-toggle"

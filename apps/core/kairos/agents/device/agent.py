@@ -29,7 +29,7 @@ class DeviceAgent(Agent):
     name = "device"
     capabilities = frozenset(
         {"device.profile", "device.focus", "device.close", "device.status",
-         "device.music", "device.app"}
+         "device.music", "device.app", "device.say"}
     )
 
     def __init__(self, base_url: str | None = None, token: str | None = None) -> None:
@@ -69,6 +69,11 @@ class DeviceAgent(Agent):
                 return AgentResponse.failure("Falta el nombre del perfil")
             ruta = "/profile/close" if request.payload.get("close") else "/profile"
             ok, body = await self._call(ruta, {"name": name})
+        elif capability == "device.say":
+            texto = (request.payload.get("text") or "").strip()
+            if not texto:
+                return AgentResponse.failure("Nada que decir")
+            ok, body = await self._call("/say", {"text": texto})
         elif capability == "device.app":
             clave = (request.payload.get("key") or "").strip()
             if not clave:

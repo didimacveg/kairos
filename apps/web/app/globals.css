@@ -1156,3 +1156,69 @@ html[data-motion="off"]
   text-transform: uppercase;
   color: var(--faint);
 }
+
+/* ==========================================================================
+   INFORMES DIARIOS
+   ========================================================================== */
+
+.briefings { position: relative; }
+
+.briefings > button[data-pending] {
+  color: var(--ember);
+  border-color: var(--ember);
+  box-shadow: 0 0 14px -4px var(--ember-glow);
+}
+
+.briefing-panel {
+  position: absolute;
+  top: calc(100% + 0.6rem);
+  right: 0;
+  z-index: 20;
+  width: min(30rem, 90vw);
+  max-height: 70vh;
+  overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--rule-bright);
+  padding: 1rem;
+  box-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.9);
+}
+
+.briefing-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  font-family: var(--data);
+  font-size: 0.5625rem;
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--faint);
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 0.9rem;
+}
+
+.briefing { padding: 0 0 1rem; border-bottom: 1px solid var(--rule); margin-bottom: 1rem; }
+.briefing:last-child { border-bottom: none; margin-bottom: 0; }
+
+.briefing .when {
+  font-family: var(--data);
+  font-size: 0.5625rem;
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--faint);
+  margin-bottom: 0.4rem;
+}
+
+.briefing[data-unread] .when { color: var(--ember); }
+
+.briefing p {
+  margin: 0 0 0.7rem;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  color: #c6d2d6;
+  white-space: pre-wrap;
+}
+
+.briefing-acts { display: flex; gap: 0.5rem; }
+.briefing-acts button { padding: 0.35rem 0.7rem !important; font-size: 0.5rem !important; }

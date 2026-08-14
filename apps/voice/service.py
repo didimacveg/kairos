@@ -42,6 +42,14 @@ PIPER_LENGTH = float(os.getenv("KAIROS_PIPER_LENGTH_SCALE", "1.08"))
 # compensa generando mas rapido con length_scale. Crudo, pero no necesita
 # librerias de procesado de senal ni GPU.
 PIPER_PITCH = float(os.getenv("KAIROS_PIPER_PITCH", "0.90"))
+# Los dos parametros que de verdad mueven la naturalidad, y que no estabamos
+# tocando:
+#   noise_scale  variacion del timbre. Bajo = plano y robotico; alto = ronco.
+#   noise_w      variacion de la DURACION de cada fonema. Es el que mas se
+#                nota: sin el, todas las silabas duran lo mismo y suena a
+#                metronomo. El habla humana no es isocrona.
+PIPER_NOISE = float(os.getenv("KAIROS_PIPER_NOISE", "0.667"))
+PIPER_NOISE_W = float(os.getenv("KAIROS_PIPER_NOISE_W", "0.9"))
 MAX_SPEECH_CHARS = 2000
 
 # faster-whisper devuelve avg_logprob por segmento: cuanto mas negativo, menos
@@ -133,6 +141,8 @@ async def health() -> dict[str, Any]:
         "voice_en": PIPER_VOICE_EN if _piper_en else None,
         "pitch": PIPER_PITCH,
         "length_scale": PIPER_LENGTH,
+        "noise": PIPER_NOISE,
+        "noise_w": PIPER_NOISE_W,
     }
 
 
@@ -187,40 +197,52 @@ async def transcribe(audio: UploadFile = File(...)) -> Transcription:
     )
 
 
-def _synthesize(text: str, wav: Any, voice: Any = None, first: bool = True) -> None:
-    """Sintetiza en un WAV abierto, sea cual sea la version de piper-tts.
+def _pcm(text: str, voice: Any) -> tuple[bytes, int]:
+    """Sintetiza un fragmento y devuelve las muestras crudas.
 
-    La API cambio entre versiones: unas fijan los parametros del WAV, otras
-    esperan que lo haga el llamante, y las mas nuevas devuelven trozos en vez
-    de escribir. Se prueban las tres en orden en lugar de fijar una version en
-    requirements: el servicio debe sobrevivir a que la dependencia se actualice.
+    API real de piper-tts (comprobada, no supuesta):
+
+        synthesize(text, syn_config=None, include_alignments=False)
+            -> Iterable[AudioChunk]
+
+    NO recibe un objeto WAV. Devuelve trozos con las muestras dentro. Toda la
+    gimnasia anterior con `wave` sobraba: se pide el audio, se concatena, y el
+    WAV se monta una sola vez al final con los tramos ya listos.
     """
     engine = voice if voice is not None else _piper
-    rate = int(getattr(getattr(engine, "config", None), "sample_rate", 22050))
-    playback = max(8000, int(rate * PIPER_PITCH))
 
-    if hasattr(engine, "synthesize_wav"):
-        engine.synthesize_wav(text, wav)
-        return
-
-    # Los parametros del WAV se fijan una sola vez: los tramos siguientes solo
-    # anaden muestras.
-    if first:
-        wav.setnchannels(1)
-        wav.setsampwidth(2)
-        wav.setframerate(playback)
-
+    config = None
     try:
-        result = engine.synthesize(text, wav, length_scale=PIPER_LENGTH)
-    except TypeError:
-        result = engine.synthesize(text, wav)
+        from piper import SynthesisConfig
 
-    if result is not None:
-        for chunk in result:
-            data = getattr(chunk, "audio_int16_bytes", None)
-            if data is None:
-                data = bytes(chunk)
-            wav.writeframes(data)
+        config = SynthesisConfig(
+            length_scale=PIPER_LENGTH,
+            noise_scale=PIPER_NOISE,
+            noise_w_scale=PIPER_NOISE_W,
+        )
+    except TypeError:
+        try:
+            config = SynthesisConfig(
+                length_scale=PIPER_LENGTH, noise_scale=PIPER_NOISE, noise_w=PIPER_NOISE_W
+            )
+        except Exception:  # noqa: BLE001
+            config = None
+    except Exception:  # noqa: BLE001
+        # Versiones sin SynthesisConfig: se sintetiza a velocidad nominal.
+        pass
+
+    piezas: list[bytes] = []
+    rate = int(getattr(getattr(engine, "config", None), "sample_rate", 22050))
+
+    trozos = engine.synthesize(text, config) if config else engine.synthesize(text)
+    for chunk in trozos:
+        data = getattr(chunk, "audio_int16_bytes", None)
+        if data is None:
+            data = bytes(chunk)
+        piezas.append(data)
+        rate = int(getattr(chunk, "sample_rate", rate))
+
+    return b"".join(piezas), rate
 
 
 def _clean(text: str) -> str:
@@ -239,37 +261,48 @@ def _clean(text: str) -> str:
 # Palabras castellanas muy frecuentes. Su presencia es mejor senal que la de
 # palabras inglesas: "Bye Bye Bye" no tiene ninguna, pero "Reproduciendo Bye
 # Bye Bye" si, y hay que partir la frase en dos tramos.
-ES_HINTS = re.compile(
-    r"\b(el|la|los|las|de|del|que|con|para|por|una|un|es|esta|tu|te|se|"
-    r"reproduciendo|suena|modo|perfil|abriendo|cerrando|bienvenido)\b",
+# Deteccion de idioma: ESPANOL POR DEFECTO.
+#
+# La version anterior marcaba como ingles todo lo que no tuviera evidencia de
+# espanol, y "Buenas noches, Diego" —sin acentos y sin palabras de la lista—
+# se colaba. La carga de la prueba estaba al reves: hay que demostrar que algo
+# ES ingles, no que no es espanol. Equivocarse hacia el espanol solo suena
+# raro en un titulo; equivocarse hacia el ingles destroza una frase entera.
+
+EN_WORDS = re.compile(
+    r"\b(the|and|you|your|are|for|with|this|that|never|dont|don't|love|"
+    r"heart|night|life|time|baby|bye|feat|remix|live|acoustic|rock|"
+    r"blood|black|sky|fire|dream|day|man|girl|boy|world|home|way|"
+    r"is|was|be|to|of|in|on|it|my|me|we|no|yes|out|up|down|all)\b",
     re.I,
 )
-EN_ISH = re.compile(r"^[a-zA-Z0-9 '\-&.,!?]+$")
+ES_CHARS = re.compile(r"[áéíóúüñ¿¡ÁÉÍÓÚÑ]")
+ES_WORDS = re.compile(
+    r"\b(el|la|los|las|de|del|que|con|para|por|una|un|es|esta|estas|tu|te|"
+    r"se|su|sus|al|lo|le|mi|ya|muy|mas|pero|como|cuando|donde|todo|nada|"
+    r"buenas|buenos|noches|dias|tardes|hola|adios|gracias|reproduciendo|"
+    r"suena|modo|perfil|abriendo|cerrando|bienvenido|informe|hoy|manana)\b",
+    re.I,
+)
 
 
 def _looks_english(fragment: str) -> bool:
-    """Heuristica barata: sin acentos, sin enes, y sin palabras castellanas.
-
-    No es deteccion de idioma de verdad, y no hace falta: el caso real es
-    "titulo de cancion en ingles dentro de una frase en espanol".
-    """
+    """Solo True si hay evidencia POSITIVA de ingles y ninguna de espanol."""
     text = fragment.strip()
-    if len(text) < 3:
+    if len(text) < 4:
         return False
-    if any(c in text for c in "áéíóúüñÁÉÍÓÚÑ¿¡"):
+    if ES_CHARS.search(text) or ES_WORDS.search(text):
         return False
-    if ES_HINTS.search(text):
+    palabras = re.findall(r"[a-zA-Z']+", text)
+    if len(palabras) < 2:
         return False
-    return bool(EN_ISH.match(text))
+    # Al menos una palabra inglesa reconocible, o todas las palabras sin
+    # ninguna castellana en un fragmento de varias.
+    return bool(EN_WORDS.search(text))
 
 
 def _split_by_language(text: str) -> list[tuple[str, bool]]:
-    """Parte la frase en tramos, marcando cuales van en ingles.
-
-    Se corta por comas y por " de ", que es donde suele estar la frontera:
-    "Reproduciendo Bye Bye Bye de NSYNC" -> [es] Reproduciendo, [en] Bye Bye
-    Bye, [es] de, [en] NSYNC.
-    """
+    """Parte la frase en tramos, marcando cuales van en ingles."""
     piezas = re.split(r"(,|\s+de\s+|\.\s+)", text)
     tramos: list[tuple[str, bool]] = []
     for pieza in piezas:
@@ -277,8 +310,6 @@ def _split_by_language(text: str) -> list[tuple[str, bool]]:
         if not limpio:
             continue
         ingles = _looks_english(limpio)
-        # Fusiona tramos consecutivos del mismo idioma: menos cortes, menos
-        # pausas artificiales al reproducir.
         if tramos and tramos[-1][1] == ingles:
             tramos[-1] = (f"{tramos[-1][0]} {limpio}", ingles)
         else:
@@ -313,17 +344,33 @@ async def speak(body: SpeechRequest) -> Response:
 
     # Un solo WAV con todos los tramos concatenados: el cliente recibe un
     # audio, no cinco, y no hay huecos entre trozos.
-    buffer = io.BytesIO()
+    tramos = _split_by_language(text) if _piper_en else [(text, False)]
     try:
-        with wave.open(buffer, "wb") as wav:
-            tramos = _split_by_language(text) if _piper_en else [(text, False)]
-            for i, (fragmento, en_ingles) in enumerate(tramos):
-                voz = _piper_en if (en_ingles and _piper_en) else _piper
-                _synthesize(fragmento, wav, voice=voz, first=(i == 0))
+        piezas: list[bytes] = []
+        rate = 22050
+        for fragmento, en_ingles in tramos:
+            voz = _piper_en if (en_ingles and _piper_en) else _piper
+            pcm, rate = _pcm(fragmento, voz)
+            piezas.append(pcm)
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY, f"No se pudo sintetizar: {exc}"
         ) from exc
+
+    # Un solo WAV de salida. La frecuencia se baja aqui para el timbre grave:
+    # el truco del vinilo a menos revoluciones, aplicado una vez al final.
+    buffer = io.BytesIO()
+    with wave.open(buffer, "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(max(8000, int(rate * PIPER_PITCH)))
+        # 180 ms de silencio entre tramos. Sin pausa, un informe de cinco
+        # frases sale de carrerilla y cuesta seguirlo al oido.
+        silencio = b"\x00\x00" * int(rate * 0.18)
+        for i, pieza in enumerate(piezas):
+            if i:
+                wav.writeframes(silencio)
+            wav.writeframes(pieza)
 
     return Response(
         content=buffer.getvalue(),

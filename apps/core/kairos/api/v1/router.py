@@ -4,6 +4,7 @@ from fastapi import APIRouter
 
 from kairos.api.v1 import (
     routes_auth,
+    routes_briefing,
     routes_chat,
     routes_device,
     routes_health,
@@ -18,3 +19,4 @@ api_router.include_router(routes_chat.router)
 api_router.include_router(routes_voice.router)
 api_router.include_router(routes_device.router)
 api_router.include_router(routes_intent.router)
+api_router.include_router(routes_briefing.router)
