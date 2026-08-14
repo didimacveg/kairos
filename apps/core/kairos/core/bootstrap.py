@@ -71,4 +71,8 @@ def build_core() -> KairosCore:
     # Control del escritorio no es algo que deba activarse por descuido.
     if settings.bridge_enabled and settings.bridge_token:
         registry.register(DeviceAgent())
+    elif settings.bridge_enabled:
+        # Fallar en silencio aqui cuesta caro: el chat responde "no puedo
+        # hacer nada" y parece un problema del modelo, no de configuracion.
+        log.warning("bridge.sin_token", detalle="KAIROS_BRIDGE_ENABLED=true pero falta KAIROS_BRIDGE_TOKEN")
     return KairosCore(registry)

@@ -94,6 +94,10 @@ class Config:
         return {k: v for k, v in self.data.get("chains", {}).items() if isinstance(v, dict)}
 
     @property
+    def apps(self) -> dict[str, Any]:
+        return self.data.get("apps", {})
+
+    @property
     def input_device(self) -> int | None:
         value = self.data.get("input_device")
         return int(value) if value is not None else None
@@ -255,6 +259,21 @@ class WindowRequest(BaseModel):
     confirm: bool = False
 
 
+class AppRequest(BaseModel):
+    # Clave del catalogo, NO una ruta ni un comando. El puente traduce la
+    # clave a lo que el usuario haya declarado; una clave desconocida se
+    # rechaza sin mas.
+    key: str
+
+
+class MusicRequest(BaseModel):
+    # Lista cerrada, igual que los perfiles: el nucleo pide una accion POR
+    # NOMBRE, nunca una orden libre.
+    action: str
+    query: str = ""
+    percent: int = 50
+
+
 @app.get("/health")
 async def health(request: Request) -> dict[str, Any]:
     solo_origen_confiable(request)
@@ -264,6 +283,7 @@ async def health(request: Request) -> dict[str, Any]:
         "frases": sorted(config.phrases),
         "escritorio": actions.describe_desktop(),
         "spotify": "autorizado" if music.configured else "sin autorizar",
+        "apps": sorted(config.apps),
     }
 
 
@@ -288,6 +308,46 @@ async def close(body: WindowRequest) -> dict[str, Any]:
     if not body.confirm:
         return {"ok": False, "error": "cerrar requiere confirm=true"}
     return {"ok": True, "result": actions.close_window(body.pattern)}
+
+
+def open_app(key: str) -> dict[str, Any]:
+    """Abre una aplicacion del catalogo. Claves desconocidas: no."""
+    entry = config.apps.get(key.strip().lower())
+    if entry is None:
+        return {"ok": False, "error": f"aplicacion no declarada: {key}"}
+    spec = actions.AppSpec(
+        name=entry.get("name", key),
+        launch=entry["launch"],
+        window=entry.get("window", ""),
+        monitor=entry.get("monitor", "principal"),
+        slot=entry.get("slot", "full"),
+        args=list(entry.get("args", [])),
+        play=bool(entry.get("play", False)),
+        background=bool(entry.get("background", False)),
+    )
+    return {"ok": True, "result": actions.launch(spec), "say": f"{spec.name} abierto."}
+
+
+@app.post("/app", dependencies=[Depends(authorize)])
+async def app_open(body: AppRequest) -> dict[str, Any]:
+    return open_app(body.key)
+
+
+@app.post("/music", dependencies=[Depends(authorize)])
+async def music_control(body: MusicRequest) -> dict[str, Any]:
+    acciones = {
+        "play": lambda: music.search_and_play(body.query),
+        "pause": music.pause,
+        "resume": music.resume,
+        "next": music.next_track,
+        "previous": music.previous_track,
+        "volume": lambda: music.set_volume(body.percent),
+        "now": music.now_playing,
+    }
+    accion = acciones.get(body.action)
+    if accion is None:
+        return {"ok": False, "error": f"accion no declarada: {body.action}"}
+    return {"ok": True, "result": accion()}
 
 
 @app.post("/reload", dependencies=[Depends(authorize)])

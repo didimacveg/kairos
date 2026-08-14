@@ -31,6 +31,7 @@ from kairos.agents.reasoning.providers.base import ChatTurn, LLMProvider
 # no algo que el modelo pueda hacer por su cuenta.
 ACTIONS = {
     "abrir_perfil": ["perfil"],
+    "abrir_app": ["app"],
     "cerrar_perfil": ["perfil"],
     "cambiar_perfil": ["perfil", "perfil_anterior"],
     "poner_musica": ["consulta"],
@@ -52,6 +53,9 @@ Acciones disponibles (NO puedes inventar otras):
 
 Perfiles que existen (NO puedes inventar otros):
 {perfiles}
+
+Aplicaciones que existen (NO puedes inventar otras):
+{apps}
 
 Reglas:
 - Devuelve SOLO un objeto JSON, sin texto alrededor ni ```.
@@ -76,14 +80,20 @@ Ejemplos:
 "para la musica un momento" -> {{"accion":"pausar_musica"}}
 "ponlo al cuarenta por ciento" -> {{"accion":"poner_volumen","porcentaje":40}}
 "que cancion es esta" -> {{"accion":"que_suena"}}
+"abre spotify" -> {{"accion":"abrir_app","app":"spotify"}}
+"ponme youtube" -> {{"accion":"abrir_app","app":"youtube"}}
+"lanza el visual studio" -> {{"accion":"abrir_app","app":"vscode"}}
 "que tiempo hace manana" -> {{"accion":"conversar"}}"""
 
 
-def parse_intent(raw: str, profiles: list[str]) -> dict[str, Any]:
+def parse_intent(
+    raw: str, profiles: list[str], apps: list[str] | None = None
+) -> dict[str, Any]:
     """Valida la salida del modelo contra la lista cerrada.
 
     Nunca lanza. Todo lo dudoso acaba en `conversar`, que no toca nada.
     """
+    apps = apps or []
     start, end = raw.find("{"), raw.rfind("}")
     if start == -1 or end == -1:
         return {"accion": "conversar"}
@@ -99,6 +109,13 @@ def parse_intent(raw: str, profiles: list[str]) -> dict[str, Any]:
         return {"accion": "conversar"}
 
     resultado: dict[str, Any] = {"accion": accion}
+
+    if "app" in ACTIONS[accion]:
+        app = str(parsed.get("app", "")).strip().lower()
+        # Igual que los perfiles: una app inventada no llega al puente.
+        if app not in apps:
+            return {"accion": "conversar"}
+        resultado["app"] = app
 
     if "perfil" in ACTIONS[accion]:
         perfil = str(parsed.get("perfil", "")).strip().lower()
@@ -147,8 +164,11 @@ class IntentAgent(Agent):
         acciones = "\n".join(
             f"- {a}" + (f" (campos: {', '.join(c)})" if c else "") for a, c in ACTIONS.items()
         )
+        apps = [a.lower() for a in request.payload.get("apps", [])]
         system = PROMPT.format(
-            acciones=acciones, perfiles=", ".join(profiles) or "ninguno declarado"
+            acciones=acciones,
+            perfiles=", ".join(profiles) or "ninguno declarado",
+            apps=", ".join(apps) or "ninguna declarada",
         )
 
         started = time.perf_counter()
@@ -159,7 +179,7 @@ class IntentAgent(Agent):
         except Exception as exc:  # noqa: BLE001
             return AgentResponse.failure(f"{type(exc).__name__}: {exc}")
 
-        intent = parse_intent(completion.text, profiles)
+        intent = parse_intent(completion.text, profiles, apps)
         return AgentResponse(
             ok=True,
             data=intent,

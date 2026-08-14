@@ -204,6 +204,32 @@ class KairosCore:
             data={"memories": memories, "conversation_id": str(conversation.id)},
         )
 
+        accion_texto, accion_trace = await self._try_action(db, user, message, correlation_id)
+        trace += accion_trace
+        for event in accion_trace:
+            yield StreamEvent(type="trace", trace=event)
+
+        if accion_texto is not None:
+            # Era una orden, no una pregunta: se ejecuta y se confirma. No
+            # tiene sentido gastar una generacion en describir lo que ya se
+            # ha hecho.
+            yield StreamEvent(type="token", text=accion_texto)
+            await self._persist_turn(
+                db, conversation_id=conversation.id, user_message=message,
+                reply=accion_texto, model="accion", latency_ms=0)
+            yield StreamEvent(
+                type="end",
+                data={
+                    "conversation_id": str(conversation.id),
+                    "model": "accion directa",
+                    "latency_ms": 0,
+                    "local": True,
+                    "memories": memories,
+                    "trace": [t.model_dump(mode="json") for t in trace],
+                },
+            )
+            return
+
         sources, search_trace = await self._search_if_needed(db, user, message, correlation_id)
         trace += search_trace
         for event in search_trace:
@@ -398,6 +424,114 @@ class KairosCore:
                 detail={"consulta": message[:120], "resultados": len(sources)},
             )
         return sources, result.trace
+
+
+    async def _try_action(
+        self, db: AsyncSession, user: User, message: str, correlation_id: uuid.UUID
+    ) -> tuple[str | None, list[TraceEvent]]:
+        """¿El mensaje es una orden sobre el escritorio? Si lo es, la ejecuta.
+
+        Hasta ahora el chat solo sabia conversar: el IntentAgent existia pero
+        solo lo usaba el puente por voz. Desde la web, KAIROS respondia con
+        toda la razon que no podia hacer nada.
+
+        La cadena es la misma que por voz, y por tanto tiene las mismas
+        garantias: el modelo NO emite ordenes, elige de una lista cerrada que
+        se valida en el IntentAgent; el puente solo conoce perfiles y acciones
+        declarados por el usuario. Que la orden llegue escrita o hablada no
+        cambia nada.
+
+        Devuelve el texto de confirmacion, o None si era conversacion.
+        """
+        try:
+            intent_agent = self._registry.find("intent.classify")
+            device = self._registry.find("device.profile")
+        except KeyError:
+            return None, []
+
+        status = await device.handle(AgentRequest(capability="device.status"))
+        if not status.ok:
+            return None, []
+        profiles = status.data.get("perfiles", [])
+        apps = status.data.get("apps", [])
+
+        clasificacion = await intent_agent.handle(
+            AgentRequest(
+                capability="intent.classify",
+                actor_id=user.id,
+                correlation_id=correlation_id,
+                payload={"text": message, "profiles": profiles, "apps": apps},
+            )
+        )
+        if not clasificacion.ok:
+            return None, []
+
+        intent = clasificacion.data
+        accion = intent.get("accion", "conversar")
+        if accion == "conversar":
+            return None, []
+
+        trace = list(clasificacion.trace)
+        MUSICA = {
+            "poner_musica": ("play", intent.get("consulta", "")),
+            "pausar_musica": ("pause", ""),
+            "reanudar_musica": ("resume", ""),
+            "siguiente_cancion": ("next", ""),
+            "cancion_anterior": ("previous", ""),
+            "que_suena": ("now", ""),
+        }
+
+        if accion == "abrir_app":
+            resultado = await device.handle(AgentRequest(
+                capability="device.app", actor_id=user.id,
+                payload={"key": intent.get("app", "")}))
+            trace += resultado.trace
+            texto = str(resultado.data.get("say") or resultado.data.get("result", "Hecho."))
+        elif accion in {"abrir_perfil", "cerrar_perfil", "cambiar_perfil"}:
+            perfil = intent.get("perfil", "")
+            if accion == "cambiar_perfil" and intent.get("perfil_anterior"):
+                await device.handle(AgentRequest(
+                    capability="device.profile", actor_id=user.id,
+                    payload={"name": intent["perfil_anterior"], "close": True}))
+            capacidad = "device.profile"
+            payload = {"name": perfil}
+            if accion == "cerrar_perfil":
+                payload["close"] = True
+            resultado = await device.handle(
+                AgentRequest(capability=capacidad, actor_id=user.id, payload=payload))
+            trace += resultado.trace
+            verbo = "Cerrado" if accion == "cerrar_perfil" else "Abierto"
+            texto = (resultado.data.get("say")
+                     or f"{verbo} el perfil {perfil}.")
+        elif accion in MUSICA:
+            nombre, consulta = MUSICA[accion]
+            resultado = await device.handle(AgentRequest(
+                capability="device.music", actor_id=user.id,
+                payload={"action": nombre, "query": consulta}))
+            trace += resultado.trace
+            texto = str(resultado.data.get("result", "Hecho."))
+        elif accion in {"subir_volumen", "bajar_volumen", "poner_volumen"}:
+            pct = intent.get("porcentaje", 80 if accion == "subir_volumen" else 30)
+            resultado = await device.handle(AgentRequest(
+                capability="device.music", actor_id=user.id,
+                payload={"action": "volume", "percent": pct}))
+            trace += resultado.trace
+            texto = str(resultado.data.get("result", f"Volumen al {pct}%."))
+        else:
+            return None, trace
+
+        if not resultado.ok:
+            texto = f"No he podido: {resultado.error}"
+
+        await audit.record(
+            db,
+            action=f"chat.{accion}",
+            outcome="success" if resultado.ok else "failure",
+            actor_id=user.id,
+            correlation_id=correlation_id,
+            detail={k: v for k, v in intent.items() if k != "accion"},
+        )
+        return texto, trace
 
     async def _get_or_create_conversation(
         self,

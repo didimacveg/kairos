@@ -28,7 +28,8 @@ from kairos.config import get_settings
 class DeviceAgent(Agent):
     name = "device"
     capabilities = frozenset(
-        {"device.profile", "device.focus", "device.close", "device.status"}
+        {"device.profile", "device.focus", "device.close", "device.status",
+         "device.music", "device.app"}
     )
 
     def __init__(self, base_url: str | None = None, token: str | None = None) -> None:
@@ -66,7 +67,22 @@ class DeviceAgent(Agent):
             name = (request.payload.get("name") or "").strip()
             if not name:
                 return AgentResponse.failure("Falta el nombre del perfil")
-            ok, body = await self._call("/profile", {"name": name})
+            ruta = "/profile/close" if request.payload.get("close") else "/profile"
+            ok, body = await self._call(ruta, {"name": name})
+        elif capability == "device.app":
+            clave = (request.payload.get("key") or "").strip()
+            if not clave:
+                return AgentResponse.failure("Falta la aplicacion")
+            ok, body = await self._call("/app", {"key": clave})
+        elif capability == "device.music":
+            accion = (request.payload.get("action") or "").strip()
+            if not accion:
+                return AgentResponse.failure("Falta la accion de musica")
+            ok, body = await self._call("/music", {
+                "action": accion,
+                "query": request.payload.get("query", ""),
+                "percent": int(request.payload.get("percent", 50)),
+            })
         elif capability == "device.focus":
             pattern = (request.payload.get("pattern") or "").strip()
             if not pattern:

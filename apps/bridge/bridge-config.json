@@ -186,5 +186,72 @@
       ]
     }
   },
-  "input_device": 2
+  "input_device": 2,
+  "apps": {
+    "spotify": {
+      "name": "Spotify",
+      "launch": "spotify:",
+      "window": "Spotify",
+      "monitor": "secundario",
+      "slot": "full"
+    },
+    "discord": {
+      "name": "Discord",
+      "launch": "discord:",
+      "window": "Discord",
+      "monitor": "secundario",
+      "slot": "full"
+    },
+    "chrome": {
+      "name": "Chrome",
+      "launch": "chrome",
+      "window": "Chrome",
+      "monitor": "principal",
+      "slot": "full"
+    },
+    "youtube": {
+      "name": "YouTube",
+      "launch": "https://youtube.com",
+      "window": "YouTube",
+      "monitor": "principal",
+      "slot": "full"
+    },
+    "vscode": {
+      "name": "VS Code",
+      "launch": "code",
+      "args": [
+        "--remote",
+        "wsl+Ubuntu",
+        "/home/diego/kairos-os"
+      ],
+      "window": "Visual Studio Code",
+      "monitor": "principal",
+      "slot": "full"
+    },
+    "valorant": {
+      "name": "Valorant",
+      "launch": "C:\\Riot Games\\Riot Client\\RiotClientServices.exe",
+      "args": [
+        "--launch-product=valorant",
+        "--launch-patchline=live"
+      ],
+      "window": "VALORANT",
+      "monitor": "principal",
+      "slot": "full"
+    },
+    "roblox": {
+      "name": "Roblox",
+      "launch": "roblox:",
+      "window": "Roblox",
+      "monitor": "principal",
+      "slot": "full"
+    },
+    "docker": {
+      "name": "Docker Desktop",
+      "launch": "Docker Desktop",
+      "window": "Docker Desktop",
+      "background": true
+    }
+  },
+  "_apps_nota": "Catalogo cerrado: KAIROS solo puede abrir lo que aparezca aqui. Anadir una app es una decision tuya, no algo que el modelo pueda hacer."
 }
