@@ -62,6 +62,10 @@ class Settings(BaseSettings):
     briefing_time: str = Field("15:30", alias="KAIROS_BRIEFING_TIME")
     briefing_weekends: bool = Field(True, alias="KAIROS_BRIEFING_WEEKENDS")
     briefing_city: str = Field("Madrid", alias="KAIROS_BRIEFING_CITY")
+    attachments_dir: str = Field("/var/lib/kairos/attachments", alias="KAIROS_ATTACHMENTS_DIR")
+    # Nombres adicionales por los que se puede llegar al nucleo, separados por
+    # comas. Se usa para el acceso desde el movil por red privada.
+    extra_hosts_raw: str = Field("", alias="KAIROS_EXTRA_HOSTS")
     anthropic_api_key: str | None = Field(None, alias="ANTHROPIC_API_KEY")
     openai_api_key: str | None = Field(None, alias="OPENAI_API_KEY")
 
@@ -85,6 +89,11 @@ class Settings(BaseSettings):
                 path=self.postgres_db,
             )
         )
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def extra_hosts(self) -> list[str]:
+        return [h.strip() for h in self.extra_hosts_raw.split(",") if h.strip()]
 
     @computed_field  # type: ignore[prop-decorator]
     @property

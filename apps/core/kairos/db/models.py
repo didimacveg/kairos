@@ -160,6 +160,25 @@ class Briefing(Base):
     )
 
 
+class Attachment(Base):
+    """Imagen adjunta a una conversacion.
+
+    Vive en disco, en un volumen local. NUNCA entra en la memoria semantica:
+    una foto no es un hecho sobre el usuario, e indexarla ensuciaria cada
+    busqueda futura sin aportar nada recuperable.
+    """
+
+    __tablename__ = "attachments"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    owner_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    media_type: Mapped[str] = mapped_column(String(64))
+    size: Mapped[int] = mapped_column(Integer)
+    sha256: Mapped[str] = mapped_column(String(64))
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class AuditLog(Base):
     """Registro append-only de acciones con relevancia de seguridad."""
 

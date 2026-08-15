@@ -1222,3 +1222,54 @@ html[data-motion="off"]
 
 .briefing-acts { display: flex; gap: 0.5rem; }
 .briefing-acts button { padding: 0.35rem 0.7rem !important; font-size: 0.5rem !important; }
+
+/* ==========================================================================
+   IMÁGENES ADJUNTAS
+   ========================================================================== */
+
+.attach {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  align-items: stretch;
+  min-width: 7rem;
+}
+
+.attach-list { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+
+.attach-list figure {
+  margin: 0;
+  position: relative;
+  width: 3.2rem;
+  height: 3.2rem;
+  border: 1px solid var(--rule-bright);
+  overflow: hidden;
+}
+
+.attach-list img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.attach-list figure button {
+  position: absolute;
+  top: 0;
+  right: 0;
+  padding: 0 !important;
+  width: 1.1rem;
+  height: 1.1rem;
+  line-height: 1;
+  font-size: 0.8rem !important;
+  border: none;
+  background: var(--void);
+  color: var(--ember);
+}
+
+.attach-note,
+.attach-warn {
+  font-family: var(--data);
+  font-size: 0.5rem;
+  letter-spacing: 0.06em;
+  line-height: 1.4;
+  max-width: 11rem;
+}
+
+.attach-note { color: var(--faint); }
+.attach-warn { color: var(--ember); }

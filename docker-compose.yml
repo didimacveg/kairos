@@ -99,6 +99,7 @@ services:
     volumes:
       - ./apps/core:/app:ro
       - corestate:/var/lib/kairos
+      - adjuntos:/var/lib/kairos/attachments
     read_only: true
     tmpfs:
       - /tmp
@@ -131,11 +132,17 @@ services:
       - ./apps/web/lib:/app/lib
       - ./apps/web/next.config.mjs:/app/next.config.mjs
     ports:
-      - "127.0.0.1:3000:3000"
+      # ${KAIROS_WEB_BIND} decide quien puede llegar:
+      #   127.0.0.1  solo esta maquina (por defecto, lo mas seguro)
+      #   0.0.0.0    tambien la red privada, para el movil
+      # Con 0.0.0.0, quien protege es el cortafuegos de Windows: la regla solo
+      # permite el rango de Tailscale, no toda la WiFi.
+      - "${KAIROS_WEB_BIND:-127.0.0.1}:3000:3000"
     security_opt:
       - no-new-privileges:true
 
 volumes:
+  adjuntos:
   whisper:
   pgdata:
   ollama:

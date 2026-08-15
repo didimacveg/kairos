@@ -59,7 +59,13 @@ def create_app() -> FastAPI:
     )
     app.add_middleware(
         TrustedHostMiddleware,
-        allowed_hosts=["localhost", "127.0.0.1", "core", "kairos.local", "*.local"],
+        allowed_hosts=[
+            "localhost", "127.0.0.1", "core", "kairos.local", "*.local",
+            # Nombres de red privada (Tailscale). NO abre nada por si solo:
+            # solo permite que las peticiones que YA llegan por la VPN no se
+            # rechacen por el nombre del host.
+            "*.ts.net", *settings.extra_hosts,
+        ],
     )
     app.include_router(api_router)
 

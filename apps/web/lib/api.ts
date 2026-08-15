@@ -138,6 +138,7 @@ export function streamChat(
   message: string,
   conversationId: string | null,
   handlers: StreamHandlers,
+  attachments: string[] = [],
 ): () => void {
   const controller = new AbortController();
 
@@ -148,7 +149,7 @@ export function streamChat(
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message, conversation_id: conversationId }),
+        body: JSON.stringify({ message, conversation_id: conversationId, attachments }),
         signal: controller.signal,
       });
 

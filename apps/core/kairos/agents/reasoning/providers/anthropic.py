@@ -56,9 +56,22 @@ class AnthropicProvider(LLMProvider):
         # La API de Anthropic separa el sistema del historial, a diferencia de
         # Ollama que lo mete como un turno mas.
         system = "\n\n".join(t.content for t in turns if t.role == "system")
-        messages = [
-            {"role": t.role, "content": t.content} for t in turns if t.role in {"user", "assistant"}
-        ]
+        messages: list[dict[str, object]] = []
+        for t in turns:
+            if t.role not in {"user", "assistant"}:
+                continue
+            if not t.images:
+                messages.append({"role": t.role, "content": t.content})
+                continue
+            # Con imagenes el contenido pasa a ser una lista de bloques, y la
+            # imagen va PRIMERO: asi el modelo mira antes de leer la pregunta.
+            bloques: list[dict[str, object]] = [
+                {"type": "image",
+                 "source": {"type": "base64", "media_type": img.media_type, "data": img.data_b64}}
+                for img in t.images
+            ]
+            bloques.append({"type": "text", "text": t.content})
+            messages.append({"role": t.role, "content": bloques})
         return {
             "model": self._model,
             "max_tokens": self._max_tokens,

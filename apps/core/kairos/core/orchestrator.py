@@ -69,6 +69,7 @@ class KairosCore:
         user: User,
         message: str,
         conversation_id: uuid.UUID | None,
+        attachments: list[uuid.UUID] | None = None,
     ) -> ChatResult:
         correlation_id = uuid.uuid4()
         trace: list[TraceEvent] = []
@@ -104,6 +105,7 @@ class KairosCore:
                     "memories": memories,
                     "history": history,
                     "sources": sources,
+                    "images": await self._load_images(db, user, attachments or []),
                 },
             )
         )
@@ -177,6 +179,7 @@ class KairosCore:
         user: User,
         message: str,
         conversation_id: uuid.UUID | None,
+        attachments: list[uuid.UUID] | None = None,
     ) -> AsyncIterator[StreamEvent]:
         correlation_id = uuid.uuid4()
         trace: list[TraceEvent] = []
@@ -250,6 +253,7 @@ class KairosCore:
                     "memories": memories,
                     "history": history,
                     "sources": sources,
+                    "images": await self._load_images(db, user, attachments or []),
                 },
             )
         ):
@@ -532,6 +536,46 @@ class KairosCore:
             detail={k: v for k, v in intent.items() if k != "accion"},
         )
         return texto, trace
+
+    async def _load_images(
+        self, db: AsyncSession, user: User, ids: list[uuid.UUID]
+    ) -> list[dict[str, str]]:
+        """Lee las imagenes de disco y las prepara para el proveedor.
+
+        Se comprueba la propiedad: un id de otro usuario no devuelve nada. Y
+        se leen en el momento, sin cachear: son datos personales y no tiene
+        sentido tenerlos en memoria mas de lo necesario.
+        """
+        if not ids:
+            return []
+
+        import base64
+        from pathlib import Path
+
+        from kairos.api.v1.routes_files import TIPOS
+        from kairos.config import get_settings
+        from kairos.db.models import Attachment
+
+        carpeta = Path(get_settings().attachments_dir)
+        rows = (
+            await db.execute(
+                select(Attachment).where(
+                    Attachment.id.in_(ids),
+                    Attachment.owner_id == user.id,
+                    Attachment.deleted_at.is_(None),
+                )
+            )
+        ).scalars().all()
+
+        imagenes: list[dict[str, str]] = []
+        for row in rows:
+            ruta = carpeta / f"{row.id}{TIPOS.get(row.media_type, '.bin')}"
+            if ruta.exists():
+                imagenes.append({
+                    "media_type": row.media_type,
+                    "data": base64.b64encode(ruta.read_bytes()).decode(),
+                })
+        return imagenes
 
     async def _get_or_create_conversation(
         self,

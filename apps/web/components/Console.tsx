@@ -10,6 +10,7 @@ import {
   type TraceEntry,
 } from "@/lib/api";
 import { SpeechQueue } from "@/lib/speech";
+import { Attachments, type Attached } from "./Attachments";
 import { Instruments, type TurnSummary } from "./Instruments";
 import { Sigil } from "./Sigil";
 import { StatusStrip } from "./StatusStrip";
@@ -34,6 +35,7 @@ export function Console({ username, onSignOut }: { username: string; onSignOut: 
   const [health, setHealth] = useState<Health | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [voiceOn, setVoiceOn] = useState(false);
+  const [adjuntos, setAdjuntos] = useState<Attached[]>([]);
 
   const logFoot = useRef<HTMLDivElement>(null);
   const abortRef = useRef<(() => void) | null>(null);
@@ -76,6 +78,8 @@ export function Console({ username, onSignOut }: { username: string; onSignOut: 
       const voice = speak ? new SpeechQueue((m) => setFault(m)) : null;
       speechRef.current = voice;
 
+      const idsAdjuntos = adjuntos.map((a) => a.id);
+      setAdjuntos([]);
       abortRef.current = streamChat(message, conversationId, {
         onToken: (chunk) => {
           voice?.push(chunk);
@@ -116,9 +120,9 @@ export function Console({ username, onSignOut }: { username: string; onSignOut: 
             return next;
           });
         },
-      });
+      }, idsAdjuntos);
     },
-    [draft, streaming, conversationId],
+    [draft, streaming, conversationId, adjuntos],
   );
 
   const halt = useCallback(() => {
@@ -223,6 +227,12 @@ export function Console({ username, onSignOut }: { username: string; onSignOut: 
                   send();
                 }
               }}
+            />
+            <Attachments
+              items={adjuntos}
+              egress={health?.egress_allowed ?? false}
+              onAdd={(item) => setAdjuntos((prev) => [...prev, item].slice(0, 4))}
+              onRemove={(id) => setAdjuntos((prev) => prev.filter((a) => a.id !== id))}
             />
             <VoiceSession
               active={voiceOn}

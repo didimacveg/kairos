@@ -23,7 +23,8 @@ async def chat(
     core = request.app.state.core
     try:
         result = await core.chat(
-            db, user=user, message=body.message, conversation_id=body.conversation_id
+            db, user=user, message=body.message, conversation_id=body.conversation_id,
+            attachments=body.attachments
         )
     except RuntimeError as exc:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from exc
@@ -67,7 +68,8 @@ async def chat_stream(body: ChatRequest, request: Request, user: CurrentUser) ->
         async with get_session_factory()() as db:
             try:
                 async for event in core.chat_stream(
-                    db, user=user, message=body.message, conversation_id=body.conversation_id
+                    db, user=user, message=body.message, conversation_id=body.conversation_id,
+            attachments=body.attachments
                 ):
                     payload: dict[str, object] = {"type": event.type}
                     if event.text is not None:

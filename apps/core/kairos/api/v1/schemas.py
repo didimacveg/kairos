@@ -21,6 +21,7 @@ class UserOut(BaseModel):
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=8000)
     conversation_id: uuid.UUID | None = None
+    attachments: list[uuid.UUID] = Field(default_factory=list, max_length=4)
 
 
 class MemoryHit(BaseModel):

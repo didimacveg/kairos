@@ -7,6 +7,7 @@ from kairos.api.v1 import (
     routes_briefing,
     routes_chat,
     routes_device,
+    routes_files,
     routes_health,
     routes_intent,
     routes_voice,
@@ -20,3 +21,4 @@ api_router.include_router(routes_voice.router)
 api_router.include_router(routes_device.router)
 api_router.include_router(routes_intent.router)
 api_router.include_router(routes_briefing.router)
+api_router.include_router(routes_files.router)

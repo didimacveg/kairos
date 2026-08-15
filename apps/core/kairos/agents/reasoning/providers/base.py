@@ -6,9 +6,18 @@ from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
+class ChatImage:
+    media_type: str
+    data_b64: str
+
+
+@dataclass(frozen=True)
 class ChatTurn:
     role: str  # system | user | assistant
     content: str
+    # Solo el proveedor remoto las usa hoy: qwen2.5:7b no ve imagenes. Un
+    # proveedor que no sepa que hacer con ellas las ignora, no falla.
+    images: tuple[ChatImage, ...] = ()
 
 
 @dataclass(frozen=True)

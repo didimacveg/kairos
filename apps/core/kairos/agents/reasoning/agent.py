@@ -13,7 +13,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from kairos.agents.base import Agent, AgentRequest, AgentResponse, StreamEvent, TraceEvent
-from kairos.agents.reasoning.providers.base import ChatTurn, LLMProvider
+from kairos.agents.reasoning.providers.base import ChatImage, ChatTurn, LLMProvider
 from kairos.config import get_settings
 
 DIAS = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"]
@@ -186,7 +186,11 @@ class ReasoningAgent(Agent):
 
         turns = [ChatTurn(role="system", content=system)]
         turns += [ChatTurn(role=h["role"], content=h["content"]) for h in history]
-        turns.append(ChatTurn(role="user", content=message))
+        imagenes = tuple(
+            ChatImage(media_type=i["media_type"], data_b64=i["data"])
+            for i in payload.get("images", [])
+        )
+        turns.append(ChatTurn(role="user", content=message, images=imagenes))
         return turns
 
     async def health(self) -> dict[str, Any]:
