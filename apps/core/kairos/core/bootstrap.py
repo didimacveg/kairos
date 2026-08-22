@@ -15,6 +15,7 @@ from kairos.agents.registry import AgentRegistry
 from kairos.agents.search.agent import SearchAgent
 from kairos.agents.briefing.agent import BriefingAgent
 from kairos.agents.device.agent import DeviceAgent
+from kairos.agents.forge.agent import ForgeAgent
 from kairos.agents.intent.agent import IntentAgent
 from kairos.agents.voice.agent import VoiceAgent
 from kairos.config import get_settings
@@ -73,6 +74,10 @@ def build_core() -> KairosCore:
     # Control del escritorio no es algo que deba activarse por descuido.
     if settings.bridge_enabled and settings.bridge_token:
         registry.register(DeviceAgent())
+    # Doble opt-in, igual que el puente: ejecutar codigo propuesto no es algo
+    # que deba activarse por descuido.
+    if settings.forge_enabled and settings.forge_token:
+        registry.register(ForgeAgent())
     elif settings.bridge_enabled:
         # Fallar en silencio aqui cuesta caro: el chat responde "no puedo
         # hacer nada" y parece un problema del modelo, no de configuracion.

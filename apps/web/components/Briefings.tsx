@@ -25,6 +25,10 @@ export function Briefings() {
   const [busy, setBusy] = useState(false);
   const [hablando, setHablando] = useState<string | null>(null);
   const [fallo, setFallo] = useState<string | null>(null);
+  // La fecha SOLO se formatea despues de montar. `toLocaleString` da un
+  // resultado distinto en el servidor (contenedor, UTC, locale C) que en el
+  // navegador, y esa diferencia es lo que rompia la hidratacion de React.
+  const [montado, setMontado] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -36,6 +40,7 @@ export function Briefings() {
   }, []);
 
   useEffect(() => {
+    setMontado(true);
     load();
     const id = setInterval(load, 60_000);
     return () => clearInterval(id);
@@ -119,13 +124,15 @@ export function Briefings() {
           {items.map((b) => (
             <article key={b.id} className="briefing" data-unread={!b.read || undefined}>
               <div className="when">
-                {new Date(b.created_at).toLocaleString("es-ES", {
-                  weekday: "short",
-                  day: "numeric",
-                  month: "short",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
+                {montado
+                  ? new Date(b.created_at).toLocaleString("es-ES", {
+                      weekday: "short",
+                      day: "numeric",
+                      month: "short",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })
+                  : ""}
               </div>
               <p>{b.content}</p>
               <div className="briefing-acts">

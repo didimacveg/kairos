@@ -77,6 +77,32 @@ services:
     security_opt:
       - no-new-privileges:true
 
+  forge:
+    build:
+      context: .
+      dockerfile: docker/forge.Dockerfile
+    container_name: kairos-forge
+    restart: unless-stopped
+    environment:
+      KAIROS_FORGE_TOKEN: ${KAIROS_FORGE_TOKEN:-}
+      KAIROS_FORGE_NO_NET: "si"
+    volumes:
+      # El repositorio en SOLO LECTURA. El forge clona a un temporal; el
+      # original no es escribible desde dentro pase lo que pase.
+      - .:/repo:ro
+      - forgework:/var/lib/kairos/forge
+    # Sin red: un parche hostil no puede exfiltrar nada ni descargar nada.
+    # Tampoco puede hablar con el nucleo, que es correcto — la conversacion
+    # va siempre del nucleo hacia aqui.
+    network_mode: none
+    read_only: false
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 2g
+    pids_limit: 512
+
   core:
     build:
       context: .
@@ -142,6 +168,7 @@ services:
       - no-new-privileges:true
 
 volumes:
+  forgework:
   adjuntos:
   whisper:
   pgdata:
