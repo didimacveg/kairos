@@ -235,7 +235,9 @@ class KairosCore:
 
         sources, search_trace = await self._search_if_needed(db, user, message, correlation_id)
         trace += search_trace
-        for event in search_trace:
+        abrir_trace = await self._abrir_fuentes(user, message, sources)
+        trace += abrir_trace
+        for event in search_trace + abrir_trace:
             yield StreamEvent(type="trace", trace=event)
 
         reasoning = self._registry.find("reasoning.respond_stream")
@@ -536,6 +538,39 @@ class KairosCore:
             detail={k: v for k, v in intent.items() if k != "accion"},
         )
         return texto, trace
+
+    async def _abrir_fuentes(
+        self, user: User, message: str, sources: list[dict[str, Any]]
+    ) -> list[TraceEvent]:
+        """Abre las fuentes en el navegador si el usuario lo ha pedido.
+
+        Deliberadamente NO se abre en cada busqueda: llenar la pantalla de
+        pestanas sin haberlo pedido es agresivo. Se abre cuando la peticion
+        lo sugiere — "todo lo que tengas", "enseñame", "abre las fuentes".
+        """
+        import re
+
+        if not sources:
+            return []
+        pide_fuentes = re.search(
+            r"\b(todo lo que|toda la informacion|toda la información|abre|"
+            r"ens[eé]ñame|mu[eé]strame|fuentes|enlaces|links)\b",
+            message, re.I,
+        )
+        if not pide_fuentes:
+            return []
+        try:
+            device = self._registry.find("device.open_urls")
+        except KeyError:
+            return []
+
+        urls = [s["url"] for s in sources[:4] if s.get("url")]
+        resultado = await device.handle(
+            AgentRequest(
+                capability="device.open_urls", actor_id=user.id, payload={"urls": urls}
+            )
+        )
+        return list(resultado.trace)
 
     async def _load_images(
         self, db: AsyncSession, user: User, ids: list[uuid.UUID]

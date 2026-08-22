@@ -43,6 +43,7 @@ ACTIONS = {
     "bajar_volumen": [],
     "poner_volumen": ["porcentaje"],
     "que_suena": [],
+    "abrir_fuentes": [],
     "conversar": [],
 }
 

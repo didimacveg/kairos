@@ -7,6 +7,7 @@ from collections.abc import AsyncIterator
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from kairos.api.v1.router import api_router
 from kairos.config import get_settings
@@ -56,6 +57,11 @@ def create_app() -> FastAPI:
         allow_credentials=True,
         allow_methods=["GET", "POST"],
         allow_headers=["Content-Type"],
+    )
+    # Tailscale Serve termina el TLS y reenvia a 127.0.0.1. Sin esto, el
+    # nucleo cree que la peticion llego por HTTP y rechaza la cookie Secure.
+    app.add_middleware(
+        ProxyHeadersMiddleware, trusted_hosts=["127.0.0.1", "localhost", "*"]
     )
     app.add_middleware(
         TrustedHostMiddleware,

@@ -259,6 +259,12 @@ class WindowRequest(BaseModel):
     confirm: bool = False
 
 
+class UrlRequest(BaseModel):
+    # Solo http/https, y se valida en el puente antes de tocar nada. No es un
+    # "abre lo que sea": file://, javascript: y demas quedan fuera.
+    urls: list[str] = []
+
+
 class AppRequest(BaseModel):
     # Clave del catalogo, NO una ruta ni un comando. El puente traduce la
     # clave a lo que el usuario haya declarado; una clave desconocida se
@@ -330,6 +336,28 @@ def open_app(key: str) -> dict[str, Any]:
         background=bool(entry.get("background", False)),
     )
     return {"ok": True, "result": actions.launch(spec), "say": f"{spec.name} abierto."}
+
+
+@app.post("/open-urls", dependencies=[Depends(authorize)])
+async def open_urls(body: UrlRequest) -> dict[str, Any]:
+    """Abre pestanas con las fuentes de una respuesta.
+
+    El modelo NO decide que se abre en abstracto: solo puede pasar URLs que
+    han salido de una busqueda web real, y aqui se valida el esquema. Una URL
+    que no empiece por http:// o https:// se descarta sin ejecutar nada.
+    """
+    import webbrowser
+
+    abiertas = []
+    for url in body.urls[:6]:
+        limpia = url.strip()
+        if not limpia.startswith(("http://", "https://")):
+            print(f"[bridge] URL rechazada: {limpia[:60]}")
+            continue
+        webbrowser.open_new_tab(limpia)
+        abiertas.append(limpia)
+        time.sleep(0.4)
+    return {"ok": True, "abiertas": len(abiertas), "result": f"{len(abiertas)} pestanas abiertas"}
 
 
 @app.post("/app", dependencies=[Depends(authorize)])

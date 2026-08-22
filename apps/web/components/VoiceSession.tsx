@@ -65,11 +65,18 @@ export function VoiceSession({
         };
 
         if (data.no_speech || !data.text.trim()) {
-          onSay("No he entendido nada. ¿Puedes repetirlo?");
+          // Silencio, ruido de fondo o un golpe. NO se anuncia nada: decir
+          // "no te he entendido" cuando nadie ha hablado es peor que callar,
+          // y era lo que hacia KAIROS con el ventilador de fondo.
           return;
         }
+        // Solo se pide repetir si de verdad se oyo hablar y no se entendio.
+        // Una transcripcion muy corta con confianza baja casi siempre es
+        // ruido, no una frase mal entendida.
         if (data.low_confidence) {
-          onSay("Perdona, no te he entendido bien. ¿Puedes repetirlo?");
+          if (data.text.trim().length > 12) {
+            onSay("Perdona, no te he entendido bien. ¿Puedes repetirlo?");
+          }
           return;
         }
         onUtterance(data.text.trim());
