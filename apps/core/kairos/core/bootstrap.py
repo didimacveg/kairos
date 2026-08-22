@@ -12,6 +12,8 @@ from kairos.agents.reasoning.providers.base import LLMProvider
 from kairos.agents.reasoning.providers.failover import FailoverProvider
 from kairos.agents.reasoning.providers.ollama import OllamaProvider
 from kairos.agents.registry import AgentRegistry
+from kairos.agents.smith.agent import SmithAgent
+from kairos.agents.warden.agent import WardenAgent
 from kairos.agents.search.agent import SearchAgent
 from kairos.agents.briefing.agent import BriefingAgent
 from kairos.agents.device.agent import DeviceAgent
@@ -78,6 +80,14 @@ def build_core() -> KairosCore:
     # que deba activarse por descuido.
     if settings.forge_enabled and settings.forge_token:
         registry.register(ForgeAgent())
+    # Smith exige el forge: sin banco de pruebas no se crean propuestas, punto.
+    # Un parche sin ensayar no es una propuesta, es una apuesta.
+    if settings.smith_enabled and settings.forge_enabled and settings.forge_token:
+        registry.register(SmithAgent(provider=provider, registry=registry))
+    # El aplicador es lo unico que escribe en el repositorio. Opt-in aparte
+    # de Smith: puedes querer propuestas sin querer que se apliquen solas.
+    if settings.warden_enabled and settings.warden_token:
+        registry.register(WardenAgent())
     elif settings.bridge_enabled:
         # Fallar en silencio aqui cuesta caro: el chat responde "no puedo
         # hacer nada" y parece un problema del modelo, no de configuracion.

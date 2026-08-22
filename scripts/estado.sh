@@ -53,6 +53,11 @@ PY
 fi
 
 echo
+if [ -z "$SALUD" ]; then
+  echo
+  echo "================= PUENTE =================="
+  echo "  (no se comprueba: el nucleo esta caido y es quien pregunta)"
+else
 echo "================= PUENTE =================="
 PUENTE=$(docker compose exec -T core python -c "
 import httpx
@@ -71,6 +76,8 @@ else
 fi
 
 echo
+fi
+
 echo "================ CONFIGURACION ============"
 falta=0
 for clave in KAIROS_BRIDGE_TOKEN ANTHROPIC_API_KEY KAIROS_SESSION_SECRET; do

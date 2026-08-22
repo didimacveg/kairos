@@ -179,6 +179,35 @@ class Attachment(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class Proposal(Base):
+    """Cambio que KAIROS propone hacerse a si mismo.
+
+    Nada se aplica sin decision explicita. Aprobar y aplicar son estados
+    distintos a proposito: aprobar es una decision, aplicar es una operacion
+    que puede fallar, y mezclarlos dejaria propuestas en estado ambiguo.
+    """
+
+    __tablename__ = "proposals"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    owner_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    title: Mapped[str] = mapped_column(String(200))
+    rationale: Mapped[str] = mapped_column(Text)
+    diff: Mapped[str] = mapped_column(Text)
+    branch: Mapped[str] = mapped_column(String(120))
+    risk: Mapped[str] = mapped_column(String(16), default="medio")
+    # pendiente | aprobada | rechazada | aplicada | fallida | caducada
+    status: Mapped[str] = mapped_column(String(16), default="pendiente", index=True)
+    tests_output: Mapped[str] = mapped_column(Text, default="")
+    decision_note: Mapped[str] = mapped_column(Text, default="")
+    apply_output: Mapped[str] = mapped_column(Text, default="")
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    applied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
+
+
 class AuditLog(Base):
     """Registro append-only de acciones con relevancia de seguridad."""
 

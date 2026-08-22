@@ -91,10 +91,12 @@ services:
       # original no es escribible desde dentro pase lo que pase.
       - .:/repo:ro
       - forgework:/var/lib/kairos/forge
-    # Sin red: un parche hostil no puede exfiltrar nada ni descargar nada.
-    # Tampoco puede hablar con el nucleo, que es correcto — la conversacion
-    # va siempre del nucleo hacia aqui.
-    network_mode: none
+    # Red INTERNA, no "ninguna". `network_mode: none` le quitaba tambien la
+    # red de Docker, asi que el nucleo no podia ni hablarle. Una red marcada
+    # `internal: true` deja pasar el trafico entre contenedores y bloquea la
+    # salida a Internet, que era el objetivo real.
+    networks:
+      - aislada
     read_only: false
     cap_drop:
       - ALL
@@ -102,6 +104,27 @@ services:
       - no-new-privileges:true
     mem_limit: 2g
     pids_limit: 512
+
+  warden:
+    build:
+      context: .
+      dockerfile: docker/warden.Dockerfile
+    container_name: kairos-warden
+    restart: unless-stopped
+    environment:
+      KAIROS_WARDEN_TOKEN: ${KAIROS_WARDEN_TOKEN:-}
+      KAIROS_WARDEN_MAIN: ${KAIROS_WARDEN_MAIN:-main}
+    volumes:
+      # LECTURA Y ESCRITURA. Es el unico servicio con este permiso, y por eso
+      # solo sabe hacer cuatro cosas y exige propuesta aprobada.
+      - .:/repo
+    networks:
+      - aislada
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 2g
 
   core:
     build:
@@ -124,8 +147,14 @@ services:
       - "127.0.0.1:8000:8000"
     volumes:
       - ./apps/core:/app:ro
+      # El repositorio en SOLO LECTURA: Smith lee su propio codigo
+      # para proponerse cambios, pero no puede escribir en el.
+      - .:/repo:ro
       - corestate:/var/lib/kairos
       - adjuntos:/var/lib/kairos/attachments
+    networks:
+      - default
+      - aislada
     read_only: true
     tmpfs:
       - /tmp
@@ -174,3 +203,10 @@ volumes:
   pgdata:
   ollama:
   corestate:
+
+networks:
+  # Sin salida a Internet. Los contenedores se ven entre si; el exterior no
+  # existe para ellos.
+  aislada:
+    internal: true
+  default:
