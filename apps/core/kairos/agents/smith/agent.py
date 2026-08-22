@@ -126,9 +126,13 @@ class SmithAgent(Agent):
                 ChatTurn(role="user", content=usuario),
             ])
         except Exception as exc:  # noqa: BLE001
+            log.warning('smith.fallo', paso='generar', error=str(exc)[:400])
             return AgentResponse.failure(f"{type(exc).__name__}: {exc}")
 
         cambios, motivo = diffs.parsear_respuesta(completion.text)
+        if not cambios:
+            log.warning('smith.fallo', paso='parsear',
+                        respuesta=completion.text[:600])
         traza.append(TraceEvent(
             agent=self.name, step="escribir",
             detail={"ficheros": len(cambios), "modelo": completion.model},
@@ -146,6 +150,8 @@ class SmithAgent(Agent):
                 partes.append(trozo)
         parche = "".join(partes)
         if not parche.strip():
+            log.warning('smith.fallo', paso='diff',
+                        rutas=', '.join(c.ruta for c in cambios))
             return AgentResponse.failure("El cambio propuesto no modifica nada")
 
         rama = diffs.nombre_rama(peticion)

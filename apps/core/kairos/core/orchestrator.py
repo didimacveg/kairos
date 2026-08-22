@@ -207,6 +207,34 @@ class KairosCore:
             data={"memories": memories, "conversation_id": str(conversation.id)},
         )
 
+        # Las peticiones de cambio se atienden ANTES que cualquier otra cosa:
+        # "proponte X" no es una pregunta que responder ni una accion del
+        # escritorio, y confundirla con conversacion es lo que pasaba antes.
+        peticion_cambio = self._es_peticion_de_cambio(message)
+        if peticion_cambio is not None:
+            texto, traza_cambio = await self._proponer_cambio(
+                db, user, peticion_cambio, correlation_id
+            )
+            trace += traza_cambio
+            for event in traza_cambio:
+                yield StreamEvent(type="trace", trace=event)
+            yield StreamEvent(type="token", text=texto)
+            await self._persist_turn(
+                db, conversation_id=conversation.id, user_message=message,
+                reply=texto, model="smith", latency_ms=0)
+            yield StreamEvent(
+                type="end",
+                data={
+                    "conversation_id": str(conversation.id),
+                    "model": "smith",
+                    "latency_ms": 0,
+                    "local": False,
+                    "memories": memories,
+                    "trace": [t.model_dump(mode="json") for t in trace],
+                },
+            )
+            return
+
         accion_texto, accion_trace = await self._try_action(db, user, message, correlation_id)
         trace += accion_trace
         for event in accion_trace:
@@ -431,6 +459,69 @@ class KairosCore:
             )
         return sources, result.trace
 
+
+    @staticmethod
+    def _es_peticion_de_cambio(mensaje: str) -> str | None:
+        """¿Es una peticion de cambio sobre el propio KAIROS?
+
+        Preambulo EXPLICITO y rigido, igual que por voz. La alternativa —dejar
+        que el modelo decida si una frase es una peticion de cambio— generaria
+        propuestas a partir de conversaciones sobre diseno, que es justo lo
+        contrario de lo que se quiere.
+
+        Devuelve la peticion limpia, o None si no lo es.
+        """
+        import re
+        import unicodedata
+
+        limpio = "".join(
+            c for c in unicodedata.normalize("NFD", mensaje.strip())
+            if unicodedata.category(c) != "Mn"
+        )
+        patron = re.compile(
+            r"^\s*(kairos[,:]?\s*)?"
+            r"(proponte|propon|hazte capaz de|hazte una|aprende a|programate|"
+            r"haz que puedas|modificate para)\s+(?P<que>.{10,900})$",
+            re.I | re.S,
+        )
+        m = patron.match(limpio)
+        return m.group("que").strip() if m else None
+
+    async def _proponer_cambio(
+        self, db: AsyncSession, user: User, peticion: str, correlation_id: uuid.UUID
+    ) -> tuple[str, list[TraceEvent]]:
+        """Manda la peticion a Smith y devuelve el texto de confirmacion."""
+        try:
+            smith = self._registry.find("smith.proponer")
+        except KeyError:
+            return (
+                "La auto-mejora no esta activa. Hace falta KAIROS_SMITH_ENABLED "
+                "y el banco de pruebas en marcha.",
+                [],
+            )
+
+        resultado = await smith.handle(
+            AgentRequest(
+                capability="smith.proponer",
+                actor_id=user.id,
+                correlation_id=correlation_id,
+                payload={"peticion": peticion},
+            ),
+            db=db,
+        )
+        if not resultado.ok:
+            return f"No he podido escribir el cambio: {resultado.error}", list(resultado.trace)
+
+        verde = resultado.data.get("tests_verdes")
+        ficheros = ", ".join(resultado.data.get("ficheros", []))
+        texto = (
+            f"Propuesta lista en la rama {resultado.data.get('rama')}.\n\n"
+            f"Ficheros tocados: {ficheros}\n"
+            f"Riesgo: {resultado.data.get('riesgo')}\n"
+            f"Tests: {'en verde' if verde else 'EN ROJO — revisala antes de aprobar'}\n\n"
+            "La tienes en el panel de Propuestas para leer el diff y decidir."
+        )
+        return texto, list(resultado.trace)
 
     async def _try_action(
         self, db: AsyncSession, user: User, message: str, correlation_id: uuid.UUID
