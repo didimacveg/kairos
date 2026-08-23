@@ -48,6 +48,15 @@ Arquitectura, para que sepas donde tocar:
 - apps/bridge/               proceso que corre en Windows y controla el escritorio
 
 Reglas que NO se negocian en este proyecto:
+- Todo cambio de comportamiento va SIEMPRE con su test, en un fichero de
+  apps/core/tests/. Si anades una capacidad y no anades test, el cambio esta
+  incompleto y se rechazara.
+- Antes de escribir un test, MIRA uno existente del mismo area y copia su
+  forma: como monta los dobles, como llama al agente, que asserts usa. No
+  inventes un estilo nuevo.
+- NO borres comentarios existentes ni los reescribas. Explican decisiones que
+  costaron tiempo. Si un comentario deja de ser cierto por tu cambio,
+  actualizalo; si sigue siendo cierto, dejalo intacto.
 - Un agente nunca lanza excepciones hacia arriba: devuelve AgentResponse.failure.
 - Nada que ejecute acciones acepta comandos libres: solo listas cerradas.
 - Todo cambio va acompanado de sus tests.
@@ -66,6 +75,11 @@ RIESGO: bajo|medio|alto
 --- FIN FICHERO
 
 Repite el par de marcadores por cada fichero. Maximo {max_ficheros}.
+
+SIN TEST NO HAY PROPUESTA. Si tu cambio anade o modifica comportamiento y no
+incluyes un fichero en apps/core/tests/, la propuesta esta incompleta. Escribe
+el test SIEMPRE, copiando la forma de los TESTS DE REFERENCIA que te doy: los
+mismos imports, la misma manera de montar dobles, el mismo estilo de nombres.
 Si creas un fichero nuevo, tambien entero.
 
 NO uses JSON bajo ningun concepto: escapar comillas y saltos de linea dentro
@@ -74,6 +88,37 @@ marcadores no hay nada que escapar.
 
 Riesgo: bajo si solo anade; medio si modifica logica existente; alto si toca
 autenticacion, la base de datos, el puente o el propio Smith."""
+
+
+REVISION = """Acabas de escribir un cambio de codigo. Ahora releelo como si lo
+hubiera escrito otra persona y tuvieras que aprobarlo.
+
+Busca especificamente:
+
+1. ERRORES QUE UN INTERPRETE PILLARIA. Tipos mal usados, variables sin
+   definir, imports que faltan, estructuras indexadas que no se pueden
+   indexar. Ejemplo real: `frozenset({"a": 1})` se queda solo con las claves,
+   asi que `frozenset(...)["a"]` revienta — debia ser un dict.
+2. TESTS QUE FALTAN. Si el cambio anade comportamiento y no hay fichero de
+   test en apps/core/tests/, escribelo ahora.
+3. TESTS QUE NO PASARIAN. Miralos linea a linea imaginando la ejecucion:
+   ¿los dobles devuelven lo que el codigo espera? ¿los nombres de campo
+   coinciden con los reales?
+4. COMENTARIOS BORRADOS. Si has quitado un comentario que seguia siendo
+   cierto, devuelvelo.
+5. CONTRATOS ROTOS. Un agente nunca lanza hacia arriba: devuelve
+   AgentResponse.failure.
+
+Devuelve los ficheros CORREGIDOS en el mismo formato de marcadores:
+
+MOTIVO: que has corregido respecto a tu primera version
+RIESGO: bajo|medio|alto
+--- FICHERO: ruta/del/fichero.py
+<fichero entero corregido>
+--- FIN FICHERO
+
+Devuelve TODOS los ficheros, tambien los que no cambian. Si de verdad no hay
+nada que corregir, devuelvelos tal cual estaban."""
 
 
 class SmithAgent(Agent):
@@ -119,12 +164,25 @@ class SmithAgent(Agent):
             if contenido is not None:
                 contexto.append(f"=== {ruta} ===\n{contenido}")
 
+        # Tests reales del repositorio, siempre. No es opcional: sin ver uno,
+        # el modelo no puede imitar el estilo de la casa.
+        referencias = []
+        for ruta in self._tests_de_ejemplo(relevantes):
+            contenido = repo.leer(ruta)
+            if contenido is not None:
+                referencias.append(f"=== {ruta} ===\n{contenido}")
+
         # --- 2. Escribir el cambio ----------------------------------------
         sistema = PROMPT.format(max_ficheros=diffs.MAX_FICHEROS)
         usuario = (
             f"PETICION: {peticion}\n\n"
             f"INDICE DEL REPOSITORIO:\n{indice}\n\n"
             f"FICHEROS RELEVANTES:\n\n" + "\n\n".join(contexto)
+            + (
+                "\n\nTESTS DE REFERENCIA — copia esta forma de escribir tests "
+                "(imports, dobles, nombres, asserts):\n\n" + "\n\n".join(referencias)
+                if referencias else ""
+            )
         )
         t0 = time.perf_counter()
         try:
@@ -138,6 +196,8 @@ class SmithAgent(Agent):
 
         propuesta = diffs.parsear(completion.text)
         cambios, motivo = propuesta.cambios, propuesta.motivo
+        if cambios:
+            cambios = await self._revisar(peticion, cambios, traza)
         if not cambios:
             log.warning('smith.fallo', paso='parsear',
                         respuesta=completion.text[:600])
@@ -161,6 +221,21 @@ class SmithAgent(Agent):
             log.warning('smith.fallo', paso='diff',
                         rutas=', '.join(c.ruta for c in cambios))
             return AgentResponse.failure("El cambio propuesto no modifica nada")
+
+        # Si falta el test, se avisa en la traza y sube el riesgo. No se
+        # bloquea: un cambio sin test puede seguir siendo util, pero Diego
+        # tiene que verlo escrito antes de aprobar.
+        toca_comportamiento = any(
+            not c.ruta.startswith("apps/core/tests/") for c in cambios
+        )
+        sin_test = toca_comportamiento and not any(
+            c.ruta.startswith("apps/core/tests/") for c in cambios
+        )
+        if sin_test:
+            traza.append(TraceEvent(
+                agent=self.name, step="aviso",
+                detail={"falta": "ningun fichero de test en la propuesta"},
+            ))
 
         rama = diffs.nombre_rama(peticion)
 
@@ -195,11 +270,15 @@ class SmithAgent(Agent):
         riesgo = "alto" if not verde else (
             propuesta.riesgo if orden[propuesta.riesgo] > orden[por_ruta] else por_ruta
         )
+        if sin_test and riesgo != "alto":
+            riesgo = "alto"
         propuesta = await store.crear(
             db,
             owner_id=request.actor_id,
             titulo=peticion[:200],
-            motivo=motivo or "Sin motivo declarado por el modelo.",
+            motivo=((motivo or "Sin motivo declarado por el modelo.")
+                    + ("\n\nAVISO: esta propuesta NO trae tests."
+                       if sin_test else "")),
             diff=ensayo.data.get("diff") or parche,
             rama=rama,
             riesgo=riesgo,
@@ -222,6 +301,91 @@ class SmithAgent(Agent):
                 duration_ms=int((time.perf_counter() - started) * 1000),
             )],
         )
+
+    @staticmethod
+    def _tests_de_ejemplo(elegidos: list[str]) -> list[str]:
+        """Devuelve tests reales del repositorio para que Smith copie su forma.
+
+        Se le pedia "mira un test existente y copia su estilo" sin ensenarle
+        ninguno. Un modelo no puede imitar lo que no ve: por eso escribia
+        codigo correcto y se dejaba el test, o lo inventaba con un estilo que
+        no cuadraba con la casa.
+
+        Si el modelo ya eligio ficheros de test, se respetan. Si no, se meten
+        dos de referencia igualmente — no es opcional.
+        """
+        ya = [r for r in elegidos if "/tests/" in r or r.startswith("apps/core/tests/")]
+        if ya:
+            return ya[:2]
+
+        candidatos = [
+            r for r in repo.listar()
+            if r.startswith("apps/core/tests/test_") and r.endswith(".py")
+        ]
+        # Los mas representativos primero: uno de agente con dobles, uno puro.
+        preferidos = [
+            "apps/core/tests/test_device_agent.py",
+            "apps/core/tests/test_cloud_and_search.py",
+            "apps/core/tests/test_intent.py",
+        ]
+        elegidos_ref = [c for c in preferidos if c in candidatos]
+        return (elegidos_ref or candidatos)[:2]
+
+    async def _revisar(
+        self, peticion: str, cambios: list[diffs.Cambio], traza: list[TraceEvent]
+    ) -> list[diffs.Cambio]:
+        """Segunda lectura del propio codigo antes de entregarlo.
+
+        Por que hace falta: un modelo escribe de un tiron y no ejecuta nada
+        mientras escribe. Los fallos que comete son los de alguien que no ha
+        releido — en la primera propuesta real construyo un `frozenset` a
+        partir de un diccionario y luego lo indexo, que es un error que se ve
+        a simple vista en una segunda pasada.
+
+        Los tests del forge tambien lo detectarian, pero un ciclo del forge
+        cuesta minutos y una relectura cuesta segundos. Y hay fallos que los
+        tests no cubren: comentarios borrados, tests que faltan.
+
+        Si la revision no devuelve nada util, se conserva la version original:
+        una revision que empeora el resultado es peor que ninguna.
+        """
+        import time as _t
+
+        t0 = _t.perf_counter()
+        cuerpo = "\n\n".join(
+            f"=== {c.ruta} ===\n{c.contenido}" for c in cambios
+        )
+        try:
+            revision = await self._provider.complete([
+                ChatTurn(role="system", content=REVISION),
+                ChatTurn(role="user", content=(
+                    f"PETICION ORIGINAL: {peticion}\n\n"
+                    f"CODIGO QUE HAS ESCRITO:\n\n{cuerpo}"
+                )),
+            ])
+        except Exception:  # noqa: BLE001
+            return cambios
+
+        corregida = diffs.parsear(revision.text)
+        if not corregida.cambios:
+            traza.append(TraceEvent(
+                agent=self.name, step="revisar",
+                detail={"resultado": "sin cambios tras revisar"},
+                duration_ms=int((_t.perf_counter() - t0) * 1000),
+            ))
+            return cambios
+
+        antes = {c.ruta for c in cambios}
+        ahora = {c.ruta for c in corregida.cambios}
+        traza.append(TraceEvent(
+            agent=self.name, step="revisar",
+            detail={
+                "ficheros_revisados": len(corregida.cambios),
+                "anadidos": ", ".join(sorted(ahora - antes)) or "ninguno",
+            },
+            duration_ms=int((_t.perf_counter() - t0) * 1000),
+        ))
+        return corregida.cambios
 
     async def _elegir_ficheros(self, peticion: str, indice: str) -> list[str]:
         """Pregunta al modelo que ficheros necesita ver.
