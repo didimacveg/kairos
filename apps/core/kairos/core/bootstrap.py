@@ -15,6 +15,7 @@ from kairos.agents.registry import AgentRegistry
 from kairos.agents.smith.agent import SmithAgent
 from kairos.agents.warden.agent import WardenAgent
 from kairos.agents.search.agent import SearchAgent
+from kairos.agents.agenda.agent import AgendaAgent
 from kairos.agents.briefing.agent import BriefingAgent
 from kairos.agents.device.agent import DeviceAgent
 from kairos.agents.forge.agent import ForgeAgent
@@ -71,6 +72,7 @@ def build_core() -> KairosCore:
     registry.register(VoiceAgent())
     registry.register(WatchAgent(registry=registry))
     registry.register(IntentAgent(provider=provider))
+    registry.register(AgendaAgent(provider=provider, registry=registry))
     registry.register(BriefingAgent(provider=provider, registry=registry))
     if settings.search_enabled:
         registry.register(SearchAgent())

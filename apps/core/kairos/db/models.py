@@ -208,6 +208,37 @@ class Proposal(Base):
     )
 
 
+class Reminder(Base):
+    """Recordatorio: fijo (con fecha) o abierto (por resolver).
+
+    Los abiertos son los que dan autonomia de verdad: KAIROS sale a buscar
+    cuando ocurre algo sin que nadie se lo pida en ese momento, porque se lo
+    pediste hace dias.
+    """
+
+    __tablename__ = "reminders"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    owner_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    kind: Mapped[str] = mapped_column(String(16), default="fijo")  # fijo | abierto
+    message: Mapped[str] = mapped_column(Text)
+    query: Mapped[str] = mapped_column(Text, default="")
+    source: Mapped[str] = mapped_column(Text, default="")
+    due_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
+    # pendiente | avisado | cancelado | abandonado
+    status: Mapped[str] = mapped_column(String(16), default="pendiente", index=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    last_attempt_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    fired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
 class AuditLog(Base):
     """Registro append-only de acciones con relevancia de seguridad."""
 

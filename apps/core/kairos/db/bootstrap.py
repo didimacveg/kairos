@@ -39,6 +39,7 @@ MEMORY_CURATION_2B = [
     "ALTER TABLE memory_items ADD COLUMN IF NOT EXISTS subject VARCHAR(48) NOT NULL DEFAULT ''",
     "CREATE INDEX IF NOT EXISTS ix_memory_items_subject ON memory_items (owner_id, subject, status)",
     "CREATE INDEX IF NOT EXISTS ix_briefings_created ON briefings (created_at DESC)",
+    "CREATE INDEX IF NOT EXISTS ix_reminders_due ON reminders (owner_id, status, due_at)",
     "CREATE INDEX IF NOT EXISTS ix_proposals_status ON proposals (owner_id, status, created_at DESC)",
 ]
 

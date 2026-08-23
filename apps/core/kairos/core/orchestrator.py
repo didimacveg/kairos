@@ -210,6 +210,28 @@ class KairosCore:
         # Las peticiones de cambio se atienden ANTES que cualquier otra cosa:
         # "proponte X" no es una pregunta que responder ni una accion del
         # escritorio, y confundirla con conversacion es lo que pasaba antes.
+        from kairos.agents.agenda.agent import es_peticion_de_aviso
+
+        if es_peticion_de_aviso(message):
+            texto, traza_av = await self._crear_aviso(db, user, message, correlation_id)
+            trace += traza_av
+            for event in traza_av:
+                yield StreamEvent(type="trace", trace=event)
+            yield StreamEvent(type="token", text=texto)
+            await self._persist_turn(
+                db, conversation_id=conversation.id, user_message=message,
+                reply=texto, model="agenda", latency_ms=0)
+            yield StreamEvent(
+                type="end",
+                data={
+                    "conversation_id": str(conversation.id),
+                    "model": "agenda", "latency_ms": 0, "local": False,
+                    "memories": memories,
+                    "trace": [t.model_dump(mode="json") for t in trace],
+                },
+            )
+            return
+
         if self._pide_informe(message):
             texto, traza_inf = await self._generar_informe(db, user, correlation_id)
             trace += traza_inf
@@ -638,6 +660,25 @@ class KairosCore:
             limpio,
         )
         return not pregunta
+
+    async def _crear_aviso(
+        self, db: AsyncSession, user: User, texto: str, correlation_id: uuid.UUID
+    ) -> tuple[str, list[TraceEvent]]:
+        try:
+            agente = self._registry.find("agenda.crear")
+        except KeyError:
+            return "La agenda no esta activa.", []
+
+        resultado = await agente.handle(
+            AgentRequest(
+                capability="agenda.crear", actor_id=user.id,
+                correlation_id=correlation_id, payload={"texto": texto},
+            ),
+            db=db,
+        )
+        if not resultado.ok:
+            return f"No he podido anotarlo: {resultado.error}", list(resultado.trace)
+        return resultado.data["confirmacion"], list(resultado.trace)
 
     async def _try_action(
         self, db: AsyncSession, user: User, message: str, correlation_id: uuid.UUID
