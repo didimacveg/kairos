@@ -210,6 +210,26 @@ class KairosCore:
         # Las peticiones de cambio se atienden ANTES que cualquier otra cosa:
         # "proponte X" no es una pregunta que responder ni una accion del
         # escritorio, y confundirla con conversacion es lo que pasaba antes.
+        if self._pide_informe(message):
+            texto, traza_inf = await self._generar_informe(db, user, correlation_id)
+            trace += traza_inf
+            for event in traza_inf:
+                yield StreamEvent(type="trace", trace=event)
+            yield StreamEvent(type="token", text=texto)
+            await self._persist_turn(
+                db, conversation_id=conversation.id, user_message=message,
+                reply=texto, model="informe", latency_ms=0)
+            yield StreamEvent(
+                type="end",
+                data={
+                    "conversation_id": str(conversation.id),
+                    "model": "informe", "latency_ms": 0, "local": False,
+                    "memories": memories,
+                    "trace": [t.model_dump(mode="json") for t in trace],
+                },
+            )
+            return
+
         peticion_cambio = self._es_peticion_de_cambio(message)
         if peticion_cambio is not None:
             texto, traza_cambio = await self._proponer_cambio(
@@ -235,7 +255,12 @@ class KairosCore:
             )
             return
 
-        accion_texto, accion_trace = await self._try_action(db, user, message, correlation_id)
+        if self._huele_a_orden(message):
+            accion_texto, accion_trace = await self._try_action(
+                db, user, message, correlation_id
+            )
+        else:
+            accion_texto, accion_trace = None, []
         trace += accion_trace
         for event in accion_trace:
             yield StreamEvent(type="trace", trace=event)
@@ -522,6 +547,97 @@ class KairosCore:
             "La tienes en el panel de Propuestas para leer el diff y decidir."
         )
         return texto, list(resultado.trace)
+
+    @staticmethod
+    def _pide_informe(mensaje: str) -> bool:
+        """¿Esta pidiendo el informe del dia?
+
+        Se reconoce la INTENCION, no una formula: "dame el informe", "que tal
+        va el dia", "resumen de hoy", "ponme al dia". Lo que no vale es
+        hablar SOBRE los informes — "que incluye el informe" es una pregunta,
+        no una peticion.
+        """
+        import re
+        import unicodedata
+
+        limpio = "".join(
+            c for c in unicodedata.normalize("NFD", mensaje.lower())
+            if unicodedata.category(c) != "Mn"
+        ).strip()
+
+        # Preguntas sobre el informe, no peticiones de informe.
+        if re.search(r"\b(que|como|cuando|por que|cual)\b.{0,30}\binforme", limpio):
+            return False
+
+        return bool(re.search(
+            r"\b(dame|damelo|ponme|leeme|cuentame|quiero|necesito|generame|"
+            r"hazme|lanza|repite)\b.{0,25}\b(informe|resumen|parte)\b"
+            r"|\binforme\s+(de[l]?\s+)?(dia|hoy|diario)\b"
+            r"|\bresumen\s+(de[l]?\s+)?(dia|hoy)\b"
+            r"|\bponme al dia\b"
+            r"|\bque tal (va )?(el )?dia\b",
+            limpio,
+        ))
+
+    async def _generar_informe(
+        self, db: AsyncSession, user: User, correlation_id: uuid.UUID
+    ) -> tuple[str, list[TraceEvent]]:
+        try:
+            agente = self._registry.find("briefing.generate")
+        except KeyError:
+            return "El informe diario no esta activo.", []
+
+        resultado = await agente.handle(
+            AgentRequest(
+                capability="briefing.generate", actor_id=user.id,
+                correlation_id=correlation_id,
+                payload={"owner": user.username, "db": db},
+            ),
+            db=db,
+        )
+        if not resultado.ok:
+            return f"No he podido preparar el informe: {resultado.error}", list(resultado.trace)
+        return resultado.data["content"], list(resultado.trace)
+
+    @staticmethod
+    def _huele_a_orden(mensaje: str) -> bool:
+        """Prefiltro barato antes de gastar una llamada al modelo.
+
+        El clasificador de intencion es bueno pero cuesta una ida y vuelta
+        completa, y se pagaba en CADA mensaje — incluido "que hora es", que
+        no puede ser una orden por ningun lado. Ese era el segundo de espera
+        que se notaba en preguntas triviales.
+
+        Aqui solo se descarta lo que es INEQUIVOCAMENTE conversacion: una
+        pregunta que empieza por interrogativo y no menciona nada accionable.
+        Ante la duda, se clasifica: perder medio segundo es mejor que ignorar
+        una orden.
+        """
+        import re
+        import unicodedata
+
+        limpio = "".join(
+            c for c in unicodedata.normalize("NFD", mensaje.lower())
+            if unicodedata.category(c) != "Mn"
+        ).strip(" ?¿!¡.,")
+
+        # Cualquier mencion de algo accionable pasa al clasificador.
+        accionable = re.search(
+            r"\b(perfil|modo|musica|cancion|spotify|volumen|abre|abrir|pon|"
+            r"pausa|para|cierra|reproduce|siguiente|anterior|suena|app|"
+            r"aplicacion|ventana|pantalla|trabajo|estudio|juego)\b",
+            limpio,
+        )
+        if accionable:
+            return True
+
+        # Preguntas puras: interrogativo al principio y nada accionable.
+        pregunta = re.match(
+            r"^(que|quien|cuando|donde|cuanto|cuanta|como|cual|por que|"
+            r"para que|explicame|dime|cuentame|sabes|puedes decirme)\b",
+            limpio,
+        )
+        return not pregunta
 
     async def _try_action(
         self, db: AsyncSession, user: User, message: str, correlation_id: uuid.UUID

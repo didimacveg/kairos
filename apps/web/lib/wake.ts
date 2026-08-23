@@ -98,10 +98,12 @@ export class WakeListener {
   private async bucle(): Promise<void> {
     while (!this.parado) {
       const audio = await this.capturar();
+      if (audio) console.log("[wake] capturado", audio.size, "bytes");
       if (!audio) continue;
 
       this.handlers.onState("procesando");
       const texto = (await this.transcribir(audio)).trim();
+      console.log("[wake] oido:", JSON.stringify(texto));
       if (!texto) {
         this.handlers.onState("espera");
         continue;
@@ -126,6 +128,11 @@ export class WakeListener {
         continue;
       }
 
+      // La ventana de seguimiento se consume al usarla: si no, cualquier
+      // ruido posterior entraba como orden y el estado se quedaba clavado en
+      // "seguimiento" sin llegar a entregar nada.
+      this.despiertoHasta = 0;
+
       let orden = texto;
       if (idx !== undefined) {
         const palabra = this.palabras.find((p) => bajo.indexOf(p) === idx) ?? "";
@@ -133,6 +140,7 @@ export class WakeListener {
       }
       orden = orden.replace(/^[\s,.;:!?¡¿-]+/, "").trim();
 
+      console.log("[wake] orden:", JSON.stringify(orden), "| siguiendo:", siguiendo);
       if (orden.length < 3) {
         // Solo la palabra: abre la ventana y espera la orden.
         this.despiertoHasta = Date.now() + FOLLOW_UP_MS;
@@ -140,6 +148,7 @@ export class WakeListener {
         continue;
       }
 
+      console.log("[wake] ENTREGA:", JSON.stringify(orden));
       this.handlers.onUtterance(orden);
       this.handlers.onState("espera");
     }

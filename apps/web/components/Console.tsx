@@ -31,8 +31,10 @@ function esDespertar(texto: string): boolean {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
-    .trim()
-    .replace(/^[,.;:!?¡¿\s-]+/, "");
+    // Se limpia por los DOS extremos: Whisper devuelve "despierta." con
+    // punto final, y el patron anclado al principio no lo veia venir.
+    .replace(/[^a-z\s]/g, " ")
+    .trim();
   return /^(despierta|despiertate|activate|arranca|enciendete)\b/.test(limpio);
 }
 
@@ -183,6 +185,8 @@ export function Console({ username, onSignOut }: { username: string; onSignOut: 
           // La animacion SOLO con la frase exacta. Que salte con cada orden
           // costaria rendimiento y dejaria de significar nada: un evento que
           // ocurre siempre no es un evento.
+          console.log("[despertar] evaluando:", JSON.stringify(texto),
+                      "->", esDespertar(texto));
           if (esDespertar(texto)) {
             setDespertando((n) => n + 1);
             return;

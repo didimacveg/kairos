@@ -138,6 +138,17 @@ NEEDS_SEARCH = re.compile(
 )
 
 
+# Lo que KAIROS ya sabe sin salir a Internet: la fecha y la hora van en el
+# prompt desde la Fase 3. Buscarlas anadia segundos para responder algo que
+# ya tenia delante.
+SABE_SIN_BUSCAR = re.compile(
+    r"^\s*(que|a\s+que)\s+(hora|dia|fecha)\b"
+    r"|^\s*que\s+dia\s+es\b"
+    r"|^\s*(dime|sabes)\s+(que\s+)?(hora|dia|fecha)\b",
+    re.I,
+)
+
+
 def probably_needs_search(message: str) -> bool:
     """Heuristica barata: ¿esto huele a pregunta sobre el mundo de hoy?
 
@@ -145,4 +156,6 @@ def probably_needs_search(message: str) -> bool:
     pretende serlo: buscar de mas cuesta un segundo, no buscar cuando hacia
     falta produce una respuesta inventada.
     """
+    if SABE_SIN_BUSCAR.search(message):
+        return False
     return bool(NEEDS_SEARCH.search(message))

@@ -67,6 +67,11 @@ async def _revisar(core) -> None:  # type: ignore[no-untyped-def]
 
         # El aviso lleva la pregunta si KAIROS propone algo. La respuesta
         # llega por el panel o por voz; nunca se ejecuta sin ella.
+        # Lo urgente se dice aunque no lo hayas pedido; lo normal espera en
+        # el panel. La diferencia importa: un sistema que interrumpe por todo
+        # acaba silenciado, y entonces tampoco avisa de lo que si importaba.
+        urgentes = [h for h in hallazgos if h.get("urgencia") == "alta"]
+
         texto = "\n".join(
             h["texto"] + (f"\n{h['propuesta']}" if h.get("propuesta") else "")
             for h in hallazgos
@@ -77,6 +82,10 @@ async def _revisar(core) -> None:  # type: ignore[no-untyped-def]
         # el audio se pierde pero el texto espera.
         db.add(Briefing(owner_id=owner.id, content=texto))
         await db.commit()
+
+        # Solo lo urgente se dice en alto. El resto queda como aviso escrito.
+        if not urgentes:
+            return
 
         try:
             device = core.registry.find("device.say")
