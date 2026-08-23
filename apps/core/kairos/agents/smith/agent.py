@@ -53,17 +53,24 @@ Reglas que NO se negocian en este proyecto:
 - Todo cambio va acompanado de sus tests.
 - Sin `shell=True`, sin interpolar cadenas en comandos, nunca.
 
-FORMATO DE RESPUESTA — solo JSON, sin texto alrededor ni ```:
+FORMATO DE RESPUESTA — texto plano con marcadores. NADA de JSON:
 
-{{"motivo": "que hace el cambio y por que, en 2-4 frases",
-  "riesgo": "bajo|medio|alto",
-  "ficheros": [{{"ruta": "apps/core/...", "contenido": "FICHERO COMPLETO"}}]}}
+MOTIVO: que hace el cambio y por que, en 2-4 frases
+RIESGO: bajo|medio|alto
+--- FICHERO: apps/core/kairos/agents/ejemplo.py
+<aqui el fichero ENTERO tal y como debe quedar>
+<sin escapar nada, sin bloques de codigo, tal cual iria en el editor>
+--- FIN FICHERO
+--- FICHERO: apps/core/tests/test_ejemplo.py
+<otro fichero entero>
+--- FIN FICHERO
 
-En "contenido" va el fichero ENTERO tal y como debe quedar, no un fragmento ni
-un diff. Si creas un fichero nuevo, tambien entero.
+Repite el par de marcadores por cada fichero. Maximo {max_ficheros}.
+Si creas un fichero nuevo, tambien entero.
 
-Maximo {max_ficheros} ficheros. Si el cambio necesita mas, hazlo en el minimo
-imprescindible y explica en "motivo" que falta.
+NO uses JSON bajo ningun concepto: escapar comillas y saltos de linea dentro
+de un campo JSON rompe la respuesta y se pierde todo el trabajo. Con estos
+marcadores no hay nada que escapar.
 
 Riesgo: bajo si solo anade; medio si modifica logica existente; alto si toca
 autenticacion, la base de datos, el puente o el propio Smith."""
@@ -129,7 +136,8 @@ class SmithAgent(Agent):
             log.warning('smith.fallo', paso='generar', error=str(exc)[:400])
             return AgentResponse.failure(f"{type(exc).__name__}: {exc}")
 
-        cambios, motivo = diffs.parsear_respuesta(completion.text)
+        propuesta = diffs.parsear(completion.text)
+        cambios, motivo = propuesta.cambios, propuesta.motivo
         if not cambios:
             log.warning('smith.fallo', paso='parsear',
                         respuesta=completion.text[:600])
@@ -180,7 +188,13 @@ class SmithAgent(Agent):
         )
 
         # --- 5. Dejar la propuesta ----------------------------------------
-        riesgo = "alto" if not verde else self._riesgo_por_rutas(cambios)
+        # El riesgo lo decide la ruta. Si el modelo declara uno MAYOR se
+        # respeta el suyo: nunca a la baja, si al alza.
+        por_ruta = self._riesgo_por_rutas(cambios)
+        orden = {"bajo": 0, "medio": 1, "alto": 2}
+        riesgo = "alto" if not verde else (
+            propuesta.riesgo if orden[propuesta.riesgo] > orden[por_ruta] else por_ruta
+        )
         propuesta = await store.crear(
             db,
             owner_id=request.actor_id,

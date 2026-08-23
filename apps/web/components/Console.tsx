@@ -10,6 +10,7 @@ import {
   type TraceEntry,
 } from "@/lib/api";
 import { SpeechQueue } from "@/lib/speech";
+import { WakeListener } from "@/lib/wake";
 import { Attachments, type Attached } from "./Attachments";
 import { Instruments, type TurnSummary } from "./Instruments";
 import { Sigil } from "./Sigil";
@@ -36,6 +37,9 @@ export function Console({ username, onSignOut }: { username: string; onSignOut: 
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [voiceOn, setVoiceOn] = useState(false);
   const [adjuntos, setAdjuntos] = useState<Attached[]>([]);
+  const [escuchaAmbiente, setEscuchaAmbiente] = useState(false);
+  const [estadoEscucha, setEstadoEscucha] = useState("espera");
+  const wakeRef = useRef<WakeListener | null>(null);
 
   const logFoot = useRef<HTMLDivElement>(null);
   const abortRef = useRef<(() => void) | null>(null);
@@ -143,6 +147,35 @@ export function Console({ username, onSignOut }: { username: string; onSignOut: 
     [voiceOn],
   );
 
+  // Escucha ambiente: el ÚNICO micrófono de KAIROS. Vive aquí para que se
+  // comporte igual en el PC y en el móvil.
+  useEffect(() => {
+    if (!escuchaAmbiente) {
+      wakeRef.current?.stop();
+      wakeRef.current = null;
+      setEstadoEscucha("espera");
+      return;
+    }
+    const listener = new WakeListener(
+      {
+        onLevel: () => undefined,
+        onState: setEstadoEscucha,
+        onUtterance: (texto) => {
+          listener.marcarActividad();
+          send(texto, true);
+        },
+        onFault: setFault,
+      },
+      ["kairos", "cairos", "kairo", "cairo", "chairos", "gairos", "kayros"],
+    );
+    wakeRef.current = listener;
+    void listener.start();
+    return () => {
+      listener.stop();
+      wakeRef.current = null;
+    };
+  }, [escuchaAmbiente]);
+
   // Atajo global dentro de la pestaña. Un atajo que funcione con la ventana
   // minimizada necesita el demonio de host: el navegador no puede.
   useEffect(() => {
@@ -234,6 +267,14 @@ export function Console({ username, onSignOut }: { username: string; onSignOut: 
               onAdd={(item) => setAdjuntos((prev) => [...prev, item].slice(0, 4))}
               onRemove={(id) => setAdjuntos((prev) => prev.filter((a) => a.id !== id))}
             />
+            <button
+              type="button"
+              onClick={() => setEscuchaAmbiente((v) => !v)}
+              data-live={escuchaAmbiente || undefined}
+              title="KAIROS escucha y responde cuando dices su nombre"
+            >
+              {escuchaAmbiente ? `Oyendo · ${estadoEscucha}` : "Escucha ambiente"}
+            </button>
             <VoiceSession
               active={voiceOn}
               busy={streaming}

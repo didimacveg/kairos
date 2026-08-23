@@ -646,6 +646,22 @@ def transcribe(audio: bytes) -> str:
 
 
 def start_listening() -> None:
+    """ESCUCHA DESACTIVADA A PROPOSITO.
+
+    Antes el puente tenia su propio microfono ambiente y la web tenia otro.
+    Dos oidos para un asistente es una fuga del diseno interno a la
+    experiencia: obligaba a saber por donde hablarle segun lo que quisieras.
+
+    Ahora escucha SOLO la web, y el puente se queda como manos. Mismo
+    comportamiento en el PC y en el movil, y una sola cosa que entender.
+
+    El atajo global sigue aqui: sirve para traer KAIROS al frente.
+    """
+    print("[bridge] la escucha vive en la web; el puente solo actua")
+    return
+
+
+def _start_listening_desactivado() -> None:
     """Escucha permanente con palabra de activacion.
 
     El microfono esta siempre abierto, pero solo se transcribe lo que un
