@@ -20,6 +20,22 @@ import { VoiceSession } from "./VoiceSession";
 
 type Entry = { from: "me" | "kairos"; said: string };
 
+/**
+ * ¿Es la frase de despertar?
+ *
+ * Solo "despierta" (con o sin coletillas). Deliberadamente estricto: la
+ * animacion ocupa la pantalla entera y dura casi tres segundos.
+ */
+function esDespertar(texto: string): boolean {
+  const limpio = texto
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/^[,.;:!?¡¿\s-]+/, "");
+  return /^(despierta|despiertate|activate|arranca|enciendete)\b/.test(limpio);
+}
+
 /** Atajos que abren y cierran la sesión de voz. Alt+K y Alt+7. */
 function isVoiceHotkey(event: KeyboardEvent): boolean {
   if (!event.altKey || event.ctrlKey || event.metaKey) return false;
@@ -161,15 +177,16 @@ export function Console({ username, onSignOut }: { username: string; onSignOut: 
     const listener = new WakeListener(
       {
         onLevel: () => undefined,
-        onState: (estado) => {
-          // El salto a "seguimiento" es el instante en que KAIROS reconoce
-          // su nombre. Es el unico evento de la interfaz que viene del mundo
-          // real, y por eso es el que dispara la animacion.
-          if (estado === "seguimiento") setDespertando((n) => n + 1);
-          setEstadoEscucha(estado);
-        },
+        onState: setEstadoEscucha,
         onUtterance: (texto) => {
           listener.marcarActividad();
+          // La animacion SOLO con la frase exacta. Que salte con cada orden
+          // costaria rendimiento y dejaria de significar nada: un evento que
+          // ocurre siempre no es un evento.
+          if (esDespertar(texto)) {
+            setDespertando((n) => n + 1);
+            return;
+          }
           send(texto, true);
         },
         onFault: setFault,

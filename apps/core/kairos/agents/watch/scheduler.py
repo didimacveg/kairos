@@ -65,7 +65,12 @@ async def _revisar(core) -> None:  # type: ignore[no-untyped-def]
         if not hallazgos:
             return
 
-        texto = "\n".join(h["texto"] for h in hallazgos)
+        # El aviso lleva la pregunta si KAIROS propone algo. La respuesta
+        # llega por el panel o por voz; nunca se ejecuta sin ella.
+        texto = "\n".join(
+            h["texto"] + (f"\n{h['propuesta']}" if h.get("propuesta") else "")
+            for h in hallazgos
+        )
         log.info("watch.aviso", cuantos=len(hallazgos))
 
         # Se guarda como aviso ANTES de intentar decirlo: si no estas delante,

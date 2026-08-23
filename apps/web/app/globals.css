@@ -1404,13 +1404,11 @@ html[data-motion="off"]
   .props-ask { flex-direction: column; }
 }
 
-/* ==========================================================================
-   DESPERTAR
-   La animación que se dispara cuando KAIROS te oye decir su nombre.
 
-   Es lo único de la interfaz que ocurre por un evento en el mundo real, y por
-   eso merece ser espectacular: es el momento en que el sistema deja de estar
-   en reposo. Dura 1,4 s y no se puede repetir hasta que termina.
+/* ==========================================================================
+   DESPERTAR — versión completa
+   Solo con la frase "Kairos, despierta". 2,6 s. Paleta: cian y violeta, con
+   blanco hueso reservado al núcleo del destello.
    ========================================================================== */
 
 .despertar {
@@ -1420,76 +1418,184 @@ html[data-motion="off"]
   pointer-events: none;
   display: grid;
   place-items: center;
+  overflow: hidden;
 }
 
-/* Onda que se expande desde el centro */
-.despertar-onda {
-  position: absolute;
-  width: 12rem;
-  height: 12rem;
-  border-radius: 50%;
-  border: 2px solid var(--ice);
-  opacity: 0;
-  animation: onda 1.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
+.d-lienzo { position: absolute; inset: 0; width: 100%; height: 100%; }
 
-.despertar-onda:nth-child(2) { animation-delay: 0.12s; border-color: var(--brass); }
-.despertar-onda:nth-child(3) { animation-delay: 0.24s; border-color: var(--ice-dim); }
+/* --- destello de fondo ---------------------------------------------------- */
 
-@keyframes onda {
-  0%   { transform: scale(0.2); opacity: 0; }
-  12%  { opacity: 0.9; }
-  100% { transform: scale(9); opacity: 0; }
-}
-
-/* Destello del fondo: brevísimo, como si el sistema tomara corriente */
-.despertar-flash {
+.d-flash {
   position: absolute;
   inset: 0;
-  background: radial-gradient(
-    circle at center,
-    rgba(88, 230, 255, 0.16) 0%,
-    rgba(166, 120, 255, 0.06) 40%,
-    transparent 70%
-  );
-  animation: flash 1.4s ease-out forwards;
+  background:
+    radial-gradient(circle at center, rgba(230,236,242,0.22) 0%, transparent 22%),
+    radial-gradient(circle at center, rgba(79,216,255,0.18) 0%, transparent 55%),
+    radial-gradient(circle at center, rgba(166,120,255,0.10) 0%, transparent 75%);
+  animation: d-flash 2.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-@keyframes flash {
+@keyframes d-flash {
   0%   { opacity: 0; }
-  8%   { opacity: 1; }
+  4%   { opacity: 1; }
+  30%  { opacity: 0.5; }
   100% { opacity: 0; }
 }
 
-/* La palabra, un instante */
-.despertar-marca {
-  position: relative;
-  font-family: var(--ui);
-  font-size: clamp(1.4rem, 5vw, 3rem);
-  font-weight: 200;
-  letter-spacing: 0.5em;
-  color: var(--bone);
-  text-shadow: 0 0 40px var(--ice-glow);
+/* --- núcleo --------------------------------------------------------------- */
+
+.d-nucleo {
+  transform-origin: 500px 500px;
+  animation: d-nucleo 2.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes d-nucleo {
+  0%   { transform: scale(0); opacity: 0; }
+  5%   { transform: scale(1.6); opacity: 1; }
+  18%  { transform: scale(0.7); opacity: 0.9; }
+  60%  { transform: scale(1.1); opacity: 0.5; }
+  100% { transform: scale(2.6); opacity: 0; }
+}
+
+/* --- rayos ---------------------------------------------------------------- */
+
+.d-rayos rect {
+  transform-origin: 500px 500px;
   opacity: 0;
-  animation: marca 1.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: d-rayo 1.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-@keyframes marca {
-  0%   { opacity: 0; transform: scale(0.92); letter-spacing: 0.9em; }
-  18%  { opacity: 1; }
-  60%  { opacity: 1; transform: scale(1); letter-spacing: 0.5em; }
-  100% { opacity: 0; transform: scale(1.04); }
+@keyframes d-rayo {
+  0%   { opacity: 0; transform-box: view-box; scale: 0.2 0.1; }
+  10%  { opacity: 1; }
+  100% { opacity: 0; scale: 1 3.4; }
 }
 
-/* El sigilo acompaña: un latido fuerte al despertar */
-.sigil[data-despertando] svg {
-  animation: sigilo-latido 1.4s cubic-bezier(0.16, 1, 0.3, 1);
+/* --- anillos -------------------------------------------------------------- */
+
+.d-anillo {
+  transform-origin: 500px 500px;
+  opacity: 0;
+  animation: d-anillo 2.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  filter: drop-shadow(0 0 14px var(--ice-glow));
 }
 
-@keyframes sigilo-latido {
-  0%   { transform: scale(1); filter: drop-shadow(0 0 60px rgba(88, 230, 255, 0.2)); }
-  14%  { transform: scale(1.06); filter: drop-shadow(0 0 140px rgba(88, 230, 255, 0.75)); }
-  100% { transform: scale(1); filter: drop-shadow(0 0 60px rgba(88, 230, 255, 0.2)); }
+@keyframes d-anillo {
+  0%   { transform: scale(0.15) rotate(0deg); opacity: 0; }
+  12%  { opacity: 1; }
+  100% { transform: scale(7) rotate(150deg); opacity: 0; }
+}
+
+/* --- barrido -------------------------------------------------------------- */
+
+.d-barrido {
+  transform-origin: 500px 500px;
+  opacity: 0;
+  animation: d-barrido 2.2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  filter: drop-shadow(0 0 20px var(--ice-glow));
+}
+
+@keyframes d-barrido {
+  0%   { transform: rotate(0deg) scale(0.4); opacity: 0; }
+  15%  { opacity: 1; }
+  75%  { opacity: 0.7; }
+  100% { transform: rotate(900deg) scale(2.4); opacity: 0; }
+}
+
+/* --- chispas -------------------------------------------------------------- */
+
+.d-chispas circle {
+  opacity: 0;
+  animation: d-chispa 1.9s cubic-bezier(0.12, 0.9, 0.25, 1) forwards;
+  filter: drop-shadow(0 0 8px var(--ice-glow));
+}
+
+@keyframes d-chispa {
+  0%   { transform: translate(0, 0) scale(0.4); opacity: 0; }
+  8%   { opacity: 1; }
+  70%  { opacity: 0.8; }
+  100% { transform: translate(var(--dx), var(--dy)) scale(0.2); opacity: 0; }
+}
+
+/* --- la palabra ----------------------------------------------------------- */
+
+.d-palabra {
+  position: relative;
+  display: flex;
+  gap: clamp(0.5rem, 2.2vw, 1.6rem);
+}
+
+.d-palabra span {
+  display: inline-block;
+  font-family: var(--ui);
+  font-size: clamp(2rem, 9vw, 6rem);
+  font-weight: 200;
+  color: var(--bone);
+  text-shadow:
+    0 0 30px var(--ice-glow),
+    0 0 80px rgba(166, 120, 255, 0.5);
+  opacity: 0;
+  animation: d-letra 2.05s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes d-letra {
+  0%   { opacity: 0; transform: translateY(26px) scale(0.7) rotateX(70deg); filter: blur(10px); }
+  22%  { opacity: 1; transform: translateY(0) scale(1) rotateX(0deg); filter: blur(0); }
+  70%  { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-10px) scale(1.06); filter: blur(3px); }
+}
+
+/* --- línea y pie ---------------------------------------------------------- */
+
+.d-linea {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  translate: -50% 3.4rem;
+  height: 1px;
+  width: 0;
+  background: linear-gradient(90deg, transparent, var(--ice), var(--brass), transparent);
+  animation: d-linea 2.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation-delay: 0.75s;
+}
+
+@keyframes d-linea {
+  0%   { width: 0; opacity: 0; }
+  30%  { width: min(30rem, 70vw); opacity: 1; }
+  75%  { opacity: 1; }
+  100% { width: min(30rem, 70vw); opacity: 0; }
+}
+
+.d-pie {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  translate: -50% 4.6rem;
+  font-family: var(--data);
+  font-size: 0.6rem;
+  letter-spacing: 0.45em;
+  text-transform: uppercase;
+  color: var(--ice);
+  opacity: 0;
+  animation: d-pie 2.2s ease-out forwards;
+  animation-delay: 1s;
+}
+
+@keyframes d-pie {
+  0%   { opacity: 0; letter-spacing: 0.9em; }
+  25%  { opacity: 0.9; letter-spacing: 0.45em; }
+  70%  { opacity: 0.9; }
+  100% { opacity: 0; }
+}
+
+/* El sigilo acompaña con un latido fuerte */
+.sigil[data-despertando] svg { animation: d-sigilo 2.6s cubic-bezier(0.16, 1, 0.3, 1); }
+
+@keyframes d-sigilo {
+  0%   { transform: scale(1); }
+  6%   { transform: scale(1.12); filter: drop-shadow(0 0 180px rgba(79,216,255,0.9)); }
+  30%  { transform: scale(0.97); }
+  100% { transform: scale(1); }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -43,17 +43,37 @@ SILENCIO_HORAS = 6
 PROPUESTA_OLVIDADA_DIAS = 2
 
 
+# Lista CERRADA de remedios que la vigilancia puede sugerir. El agente no
+# ejecuta ninguno: los propone y espera el si de Diego.
+#
+# Autonomo, no independiente: puede decidir QUE hace falta, no si se hace.
+ACCIONES_SUGERIDAS = {
+    "abrir_perfil": "device.profile",
+    "aplicar_propuesta": "warden.aplicar",
+    "reproducir_informe": "device.say",
+}
+
+
 class Hallazgo:
     """Algo que merece la atencion del usuario."""
 
-    __slots__ = ("clave", "texto", "urgencia")
+    __slots__ = ("clave", "texto", "urgencia", "accion", "payload", "propuesta")
 
-    def __init__(self, clave: str, texto: str, urgencia: str = "normal") -> None:
+    def __init__(
+        self, clave: str, texto: str, urgencia: str = "normal",
+        accion: str | None = None, payload: dict | None = None,
+        propuesta: str | None = None,
+    ) -> None:
         # `clave` identifica el TIPO de aviso, no la ocurrencia. Es lo que
         # permite no repetirse.
         self.clave = clave
         self.texto = texto
         self.urgencia = urgencia
+        # `accion` es una CLAVE de ACCIONES_SUGERIDAS, nunca un comando.
+        # `propuesta` es lo que KAIROS pregunta antes de hacerlo.
+        self.accion = accion if accion in ACCIONES_SUGERIDAS else None
+        self.payload = payload or {}
+        self.propuesta = propuesta
 
 
 class WatchAgent(Agent):
@@ -90,7 +110,16 @@ class WatchAgent(Agent):
             ok=True,
             data={
                 "hallazgos": [
-                    {"clave": h.clave, "texto": h.texto, "urgencia": h.urgencia}
+                    {
+                        "clave": h.clave,
+                        "texto": h.texto,
+                        "urgencia": h.urgencia,
+                        # Lo que KAIROS propone hacer, si propone algo. La
+                        # ejecucion NUNCA parte de aqui.
+                        "accion": h.accion,
+                        "payload": h.payload,
+                        "propuesta": h.propuesta,
+                    }
                     for h in nuevos
                 ],
                 "revisados": len(hallazgos),
@@ -157,8 +186,11 @@ class WatchAgent(Agent):
         return [Hallazgo(
             "propuestas_sin_aplicar",
             f"Tienes {len(filas)} propuesta(s) aprobada(s) sin aplicar: {titulos}. "
-            "Aprobarlas no las aplica; hay que pulsar Aplicar.",
+            "Aprobarlas no las aplica.",
             "normal",
+            accion="aplicar_propuesta",
+            payload={"proposal_id": str(filas[0].id)},
+            propuesta=f"¿Aplico ahora '{filas[0].title[:60]}'?",
         )]
 
     async def health(self) -> dict[str, Any]:
