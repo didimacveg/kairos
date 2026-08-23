@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
+import { Render } from "@/lib/render";
+
 import type { Attached } from "./Attachments";
 
 /**
@@ -56,6 +58,54 @@ const CSS = `
   max-width: 46rem; flex-wrap: wrap; }
 .chatmodo .cm-fotos img { width: 3.4rem; height: 3.4rem; object-fit: cover;
   border: 1px solid var(--rule-bright); }
+
+.chatmodo .cm-turno p { margin: 0 0 .85rem; }
+.chatmodo .cm-turno p:last-child { margin-bottom: 0; }
+
+.chatmodo .enc { font-weight: 400; color: #fff; margin: 1.4rem 0 .6rem;
+  line-height: 1.35; }
+.chatmodo .enc[data-nivel="1"] { font-size: 1.35rem; }
+.chatmodo .enc[data-nivel="2"] { font-size: 1.15rem; }
+.chatmodo .enc[data-nivel="3"] { font-size: 1rem; color: var(--ice); }
+.chatmodo .enc[data-nivel="4"] { font-size: .92rem; color: var(--ice-dim); }
+.chatmodo .cm-turno > :first-child.enc { margin-top: 0; }
+
+.chatmodo ul, .chatmodo ol { margin: .3rem 0 .9rem; padding-left: 1.4rem; }
+.chatmodo li { margin-bottom: .4rem; line-height: 1.7; }
+.chatmodo li::marker { color: var(--ice-dim); }
+
+.chatmodo blockquote { margin: .6rem 0 1rem; padding: .5rem 0 .5rem .9rem;
+  border-left: 2px solid var(--brass); color: #b6c3c8; font-style: italic; }
+
+.chatmodo code { font-family: var(--data); font-size: .86em;
+  background: rgba(79,216,255,.09); border: 1px solid var(--rule);
+  padding: .08em .35em; color: #9fe4f5; }
+
+.chatmodo .bloque-codigo { position: relative; margin: .8rem 0 1.1rem;
+  padding: 1rem; background: #060a10; border: 1px solid var(--rule);
+  border-left: 2px solid var(--ice-dim); overflow-x: auto; }
+.chatmodo .bloque-codigo code { background: none; border: none; padding: 0;
+  font-size: .82rem; line-height: 1.65; color: #b8c9cf; white-space: pre; }
+.chatmodo .bloque-codigo .lang { position: absolute; top: .4rem; right: .7rem;
+  font-family: var(--data); font-size: .5rem; letter-spacing: .18em;
+  text-transform: uppercase; color: var(--faint); }
+
+/* Formulas: en linea y en bloque */
+.chatmodo .mate { font-family: "Cambria Math", Georgia, serif; font-size: 1.06em;
+  color: #d7ecf2; padding: 0 .12em; }
+.chatmodo .mate-bloque { font-family: "Cambria Math", Georgia, serif;
+  font-size: 1.28rem; color: #e8f6fa; text-align: center;
+  margin: 1.1rem 0; padding: .9rem 1rem;
+  background: rgba(79,216,255,.045); border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule); overflow-x: auto; }
+
+/* La fraccion se compone de verdad: numerador sobre denominador. */
+.chatmodo .frac { display: inline-flex; flex-direction: column;
+  vertical-align: middle; text-align: center; margin: 0 .22em;
+  font-size: .88em; line-height: 1.18; }
+.chatmodo .frac > span:first-child { border-bottom: 1px solid currentColor;
+  padding: 0 .3em .06em; }
+.chatmodo .frac > span:last-child { padding: .06em .3em 0; }
 `;
 
 export function ModoChat({
@@ -127,7 +177,11 @@ export function ModoChat({
           {entradas.map((e, i) => (
             <article className="cm-turno" data-de={e.from} key={i}>
               <span className="cm-quien">{e.from === "me" ? "tú" : "kairos"}</span>
-              <p>{e.said || (streaming && i === entradas.length - 1 ? "…" : "")}</p>
+              {e.from === "kairos" ? (
+                <Render texto={e.said || (streaming && i === entradas.length - 1 ? "…" : "")} />
+              ) : (
+                <p>{e.said}</p>
+              )}
             </article>
           ))}
           <div ref={pie} />
