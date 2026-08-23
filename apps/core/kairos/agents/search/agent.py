@@ -142,9 +142,9 @@ NEEDS_SEARCH = re.compile(
 # prompt desde la Fase 3. Buscarlas anadia segundos para responder algo que
 # ya tenia delante.
 SABE_SIN_BUSCAR = re.compile(
-    r"^\s*(que|a\s+que)\s+(hora|dia|fecha)\b"
-    r"|^\s*que\s+dia\s+es\b"
-    r"|^\s*(dime|sabes)\s+(que\s+)?(hora|dia|fecha)\b",
+    r"^\s*(a\s+)?que\s+(hora|dia|fecha)\s*(es|son|estamos)?\s*(hoy)?\s*[?.!]*\s*$"
+    r"|^\s*(dime|sabes)\s+(que\s+)?(hora|dia|fecha)\s+(es|son)\s*[?.!]*\s*$"
+    r"|^\s*(la\s+)?(hora|fecha)\s*[?.!]*\s*$",
     re.I,
 )
 
