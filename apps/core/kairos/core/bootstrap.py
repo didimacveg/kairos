@@ -20,6 +20,7 @@ from kairos.agents.device.agent import DeviceAgent
 from kairos.agents.forge.agent import ForgeAgent
 from kairos.agents.intent.agent import IntentAgent
 from kairos.agents.voice.agent import VoiceAgent
+from kairos.agents.watch.agent import WatchAgent
 from kairos.config import get_settings
 from kairos.core.orchestrator import KairosCore
 from kairos.logging import get_logger
@@ -68,6 +69,7 @@ def build_core() -> KairosCore:
     registry.register(MemoryAgent(embedder=embedder, extractor=FactExtractor(embedder)))
     registry.register(ReasoningAgent(provider=provider))
     registry.register(VoiceAgent())
+    registry.register(WatchAgent(registry=registry))
     registry.register(IntentAgent(provider=provider))
     registry.register(BriefingAgent(provider=provider, registry=registry))
     if settings.search_enabled:

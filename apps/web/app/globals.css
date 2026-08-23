@@ -1403,3 +1403,95 @@ html[data-motion="off"]
   .props-panel { width: 94vw; right: -1rem; }
   .props-ask { flex-direction: column; }
 }
+
+/* ==========================================================================
+   DESPERTAR
+   La animación que se dispara cuando KAIROS te oye decir su nombre.
+
+   Es lo único de la interfaz que ocurre por un evento en el mundo real, y por
+   eso merece ser espectacular: es el momento en que el sistema deja de estar
+   en reposo. Dura 1,4 s y no se puede repetir hasta que termina.
+   ========================================================================== */
+
+.despertar {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+  display: grid;
+  place-items: center;
+}
+
+/* Onda que se expande desde el centro */
+.despertar-onda {
+  position: absolute;
+  width: 12rem;
+  height: 12rem;
+  border-radius: 50%;
+  border: 2px solid var(--ice);
+  opacity: 0;
+  animation: onda 1.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.despertar-onda:nth-child(2) { animation-delay: 0.12s; border-color: var(--brass); }
+.despertar-onda:nth-child(3) { animation-delay: 0.24s; border-color: var(--ice-dim); }
+
+@keyframes onda {
+  0%   { transform: scale(0.2); opacity: 0; }
+  12%  { opacity: 0.9; }
+  100% { transform: scale(9); opacity: 0; }
+}
+
+/* Destello del fondo: brevísimo, como si el sistema tomara corriente */
+.despertar-flash {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    circle at center,
+    rgba(88, 230, 255, 0.16) 0%,
+    rgba(166, 120, 255, 0.06) 40%,
+    transparent 70%
+  );
+  animation: flash 1.4s ease-out forwards;
+}
+
+@keyframes flash {
+  0%   { opacity: 0; }
+  8%   { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* La palabra, un instante */
+.despertar-marca {
+  position: relative;
+  font-family: var(--ui);
+  font-size: clamp(1.4rem, 5vw, 3rem);
+  font-weight: 200;
+  letter-spacing: 0.5em;
+  color: var(--bone);
+  text-shadow: 0 0 40px var(--ice-glow);
+  opacity: 0;
+  animation: marca 1.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes marca {
+  0%   { opacity: 0; transform: scale(0.92); letter-spacing: 0.9em; }
+  18%  { opacity: 1; }
+  60%  { opacity: 1; transform: scale(1); letter-spacing: 0.5em; }
+  100% { opacity: 0; transform: scale(1.04); }
+}
+
+/* El sigilo acompaña: un latido fuerte al despertar */
+.sigil[data-despertando] svg {
+  animation: sigilo-latido 1.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes sigilo-latido {
+  0%   { transform: scale(1); filter: drop-shadow(0 0 60px rgba(88, 230, 255, 0.2)); }
+  14%  { transform: scale(1.06); filter: drop-shadow(0 0 140px rgba(88, 230, 255, 0.75)); }
+  100% { transform: scale(1); filter: drop-shadow(0 0 60px rgba(88, 230, 255, 0.2)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html:not([data-motion="on"]) .despertar { display: none; }
+}

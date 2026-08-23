@@ -12,6 +12,7 @@ import {
 import { SpeechQueue } from "@/lib/speech";
 import { WakeListener } from "@/lib/wake";
 import { Attachments, type Attached } from "./Attachments";
+import { Despertar } from "./Despertar";
 import { Instruments, type TurnSummary } from "./Instruments";
 import { Sigil } from "./Sigil";
 import { StatusStrip } from "./StatusStrip";
@@ -39,6 +40,7 @@ export function Console({ username, onSignOut }: { username: string; onSignOut: 
   const [adjuntos, setAdjuntos] = useState<Attached[]>([]);
   const [escuchaAmbiente, setEscuchaAmbiente] = useState(false);
   const [estadoEscucha, setEstadoEscucha] = useState("espera");
+  const [despertando, setDespertando] = useState(0);
   const wakeRef = useRef<WakeListener | null>(null);
 
   const logFoot = useRef<HTMLDivElement>(null);
@@ -159,7 +161,13 @@ export function Console({ username, onSignOut }: { username: string; onSignOut: 
     const listener = new WakeListener(
       {
         onLevel: () => undefined,
-        onState: setEstadoEscucha,
+        onState: (estado) => {
+          // El salto a "seguimiento" es el instante en que KAIROS reconoce
+          // su nombre. Es el unico evento de la interfaz que viene del mundo
+          // real, y por eso es el que dispara la animacion.
+          if (estado === "seguimiento") setDespertando((n) => n + 1);
+          setEstadoEscucha(estado);
+        },
         onUtterance: (texto) => {
           listener.marcarActividad();
           send(texto, true);
@@ -197,6 +205,7 @@ export function Console({ username, onSignOut }: { username: string; onSignOut: 
 
   return (
     <div className="deck">
+      <Despertar activo={despertando > 0} key={despertando} />
       <StatusStrip
         health={health}
         username={username}

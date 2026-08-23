@@ -29,6 +29,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     from kairos.agents.briefing.scheduler import run_scheduler
 
     tarea = asyncio.create_task(run_scheduler(app.state.core))
+
+    from kairos.agents.watch.scheduler import run_watcher
+
+    vigilia = asyncio.create_task(run_watcher(app.state.core))
     log.info(
         "kairos.started",
         instance=settings.instance_name,
@@ -38,8 +42,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     yield
 
     tarea.cancel()
+    vigilia.cancel()
     with suppress(asyncio.CancelledError):
         await tarea
+    with suppress(asyncio.CancelledError):
+        await vigilia
 
 
 def create_app() -> FastAPI:

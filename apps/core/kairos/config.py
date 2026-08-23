@@ -69,6 +69,8 @@ class Settings(BaseSettings):
     briefing_time: str = Field("15:30", alias="KAIROS_BRIEFING_TIME")
     briefing_weekends: bool = Field(True, alias="KAIROS_BRIEFING_WEEKENDS")
     briefing_city: str = Field("Madrid", alias="KAIROS_BRIEFING_CITY")
+    watch_enabled: bool = Field(True, alias="KAIROS_WATCH_ENABLED")
+    watch_interval_minutes: int = Field(20, alias="KAIROS_WATCH_INTERVAL")
     attachments_dir: str = Field("/var/lib/kairos/attachments", alias="KAIROS_ATTACHMENTS_DIR")
     # Nombres adicionales por los que se puede llegar al nucleo, separados por
     # comas. Se usa para el acceso desde el movil por red privada.
