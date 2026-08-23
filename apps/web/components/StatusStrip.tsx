@@ -124,7 +124,9 @@ export function StatusStrip({
           onClick={toggleMotion}
           title="Animación del sigilo"
         >
-          {motion ? "Movimiento" : "Estático"}
+          {/* Los botones dicen lo que HACEN, no el estado en que estan. Si el
+              sigilo se mueve, el boton ofrece pararlo. */}
+          {motion ? "Estático" : "Movimiento"}
         </button>
         <span className="who">{username}</span>
         <button type="button" onClick={onSignOut} style={{ padding: "0.3rem 0.7rem" }}>

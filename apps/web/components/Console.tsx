@@ -13,6 +13,8 @@ import { SpeechQueue } from "@/lib/speech";
 import { WakeListener } from "@/lib/wake";
 import { Attachments, type Attached } from "./Attachments";
 import { Despertar } from "./Despertar";
+import { ModoChat } from "./ModoChat";
+import { ModoNegro } from "./ModoNegro";
 import { Instruments, type TurnSummary } from "./Instruments";
 import { Sigil } from "./Sigil";
 import { StatusStrip } from "./StatusStrip";
@@ -38,6 +40,40 @@ function esDespertar(texto: string): boolean {
   return /^(despierta|despiertate|activate|arranca|enciendete)\b/.test(limpio);
 }
 
+/**
+ * ¿Pide apagar la pantalla?
+ *
+ * Existe para grabar: se apaga todo, se prepara la cámara, y al decir
+ * "despierta" arranca desde el negro con la secuencia completa.
+ */
+function esModoNegro(texto: string): boolean {
+  const limpio = texto
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z\s]/g, " ")
+    .trim();
+  return /^(modo negro|apagate|apaga la pantalla|pantalla negra|modo oscuro total)\b/
+    .test(limpio);
+}
+
+/**
+ * ¿Pide el modo chat?
+ *
+ * El panel principal es un salpicadero: sirve para operar el sistema y
+ * estorba para estudiar. Esto lo aparta y deja solo la conversación.
+ */
+function esModoChat(texto: string): boolean {
+  const limpio = texto
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z\s]/g, " ")
+    .trim();
+  return /^(modo chat|modo estudio|modo conversacion|abre el chat|solo chat)\b/
+    .test(limpio);
+}
+
 /** Atajos que abren y cierran la sesión de voz. Alt+K y Alt+7. */
 function isVoiceHotkey(event: KeyboardEvent): boolean {
   if (!event.altKey || event.ctrlKey || event.metaKey) return false;
@@ -59,6 +95,8 @@ export function Console({ username, onSignOut }: { username: string; onSignOut: 
   const [escuchaAmbiente, setEscuchaAmbiente] = useState(false);
   const [estadoEscucha, setEstadoEscucha] = useState("espera");
   const [despertando, setDespertando] = useState(0);
+  const [modoNegro, setModoNegro] = useState(false);
+  const [modoChat, setModoChat] = useState(false);
   const wakeRef = useRef<WakeListener | null>(null);
 
   const logFoot = useRef<HTMLDivElement>(null);
@@ -149,6 +187,28 @@ export function Console({ username, onSignOut }: { username: string; onSignOut: 
     [draft, streaming, conversationId, adjuntos],
   );
 
+  const subirFoto = useCallback(async (file: File) => {
+    // Mismo endpoint que Attachments: una foto del movil y una imagen pegada
+    // son lo mismo para el nucleo.
+    try {
+      const form = new FormData();
+      form.append("file", file, file.name || "foto.jpg");
+      const r = await fetch("/api/v1/files", {
+        method: "POST",
+        credentials: "same-origin",
+        body: form,
+      });
+      if (!r.ok) throw new Error("No se pudo subir la foto");
+      const d = (await r.json()) as { id: string };
+      setAdjuntos((prev) => [
+        ...prev,
+        { id: d.id, url: URL.createObjectURL(file), name: file.name || "foto" },
+      ].slice(0, 4));
+    } catch (err) {
+      setFault(err instanceof Error ? err.message : "Fallo al subir");
+    }
+  }, []);
+
   const halt = useCallback(() => {
     abortRef.current?.();
     speechRef.current?.stop();
@@ -187,7 +247,18 @@ export function Console({ username, onSignOut }: { username: string; onSignOut: 
           // ocurre siempre no es un evento.
           console.log("[despertar] evaluando:", JSON.stringify(texto),
                       "->", esDespertar(texto));
+          if (esModoChat(texto)) {
+            setModoChat(true);
+            return;
+          }
+          if (esModoNegro(texto)) {
+            setModoNegro(true);
+            return;
+          }
           if (esDespertar(texto)) {
+            // Salir del negro y arrancar la secuencia son lo mismo: la
+            // animacion nace sobre el negro y lo disuelve al terminar.
+            setModoNegro(false);
             setDespertando((n) => n + 1);
             return;
           }
@@ -226,6 +297,16 @@ export function Console({ username, onSignOut }: { username: string; onSignOut: 
 
   return (
     <div className="deck">
+      <ModoChat
+        abierto={modoChat}
+        onCerrar={() => setModoChat(false)}
+        entradas={entries}
+        onEnviar={(texto) => send(texto)}
+        streaming={streaming}
+        adjuntos={adjuntos}
+        onFoto={(f) => void subirFoto(f)}
+      />
+      <ModoNegro activo={modoNegro} onSalir={() => setModoNegro(false)} />
       <Despertar activo={despertando > 0} key={despertando} />
       <StatusStrip
         health={health}
@@ -291,6 +372,9 @@ export function Console({ username, onSignOut }: { username: string; onSignOut: 
                 }
               }}
             />
+            <button type="button" onClick={() => setModoChat(true)}>
+              Modo chat
+            </button>
             <Attachments
               items={adjuntos}
               egress={health?.egress_allowed ?? false}
