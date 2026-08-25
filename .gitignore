@@ -22,3 +22,5 @@ models/
 # Secretos del puente
 .spotify-auth.json
 .bridge-secret
+
+google-token.json

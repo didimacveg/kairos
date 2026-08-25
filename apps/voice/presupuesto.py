@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 RUTA = Path(os.getenv("KAIROS_TTS_PRESUPUESTO", "/var/lib/kairos/tts-presupuesto.json"))
@@ -59,7 +59,7 @@ def _guardar(estado: dict) -> None:
 
 
 def _mes_actual() -> str:
-    return datetime.now(UTC).strftime("%Y-%m")
+    return datetime.now(timezone.utc).strftime("%Y-%m")
 
 
 def gastado() -> int:
