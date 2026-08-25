@@ -71,6 +71,8 @@ class Settings(BaseSettings):
     briefing_city: str = Field("Madrid", alias="KAIROS_BRIEFING_CITY")
     watch_enabled: bool = Field(True, alias="KAIROS_WATCH_ENABLED")
     agenda_enabled: bool = Field(True, alias="KAIROS_AGENDA_ENABLED")
+    curiosidad_enabled: bool = Field(True, alias="KAIROS_CURIOSIDAD_ENABLED")
+    curiosidad_horas: int = Field(2, alias="KAIROS_CURIOSIDAD_HORAS")
     watch_interval_minutes: int = Field(20, alias="KAIROS_WATCH_INTERVAL")
     attachments_dir: str = Field("/var/lib/kairos/attachments", alias="KAIROS_ATTACHMENTS_DIR")
     # Nombres adicionales por los que se puede llegar al nucleo, separados por

@@ -188,6 +188,29 @@ export function Console({ username, onSignOut }: { username: string; onSignOut: 
     [draft, streaming, conversationId, adjuntos],
   );
 
+  const saludar = useCallback(async () => {
+    const hora = new Date().getHours();
+    const momento =
+      hora < 6 ? "Buenas noches" : hora < 13 ? "Buenos días"
+      : hora < 21 ? "Buenas tardes" : "Buenas noches";
+    try {
+      const r = await fetch("/api/v1/voice/speak", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        // motivo "despertar": va con la voz buena.
+        body: JSON.stringify({ text: `${momento}, Diego.`, motivo: "despertar" }),
+      });
+      if (!r.ok) return;
+      const audio = new Audio(URL.createObjectURL(await r.blob()));
+      // La sintesis tarda menos que la animacion, asi que se espera a que
+      // termine antes de reproducir.
+      setTimeout(() => void audio.play(), 3100);
+    } catch {
+      /* sin voz, la animacion sigue valiendo */
+    }
+  }, []);
+
   const subirFoto = useCallback(async (file: File) => {
     // Mismo endpoint que Attachments: una foto del movil y una imagen pegada
     // son lo mismo para el nucleo.
@@ -277,6 +300,9 @@ export function Console({ username, onSignOut }: { username: string; onSignOut: 
             return;
           }
           if (esDespertar(texto)) {
+            // El saludo suena JUSTO al terminar la animacion, no durante:
+            // hablar por encima de la secuencia estropea las dos cosas.
+            void saludar();
             // Salir del negro y arrancar la secuencia son lo mismo: la
             // animacion nace sobre el negro y lo disuelve al terminar.
             setModoNegro(false);
