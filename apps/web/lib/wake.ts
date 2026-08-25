@@ -27,7 +27,33 @@ const SILENCE_END_MS = 700;
 const MIN_SPEECH_BLOCKS = 6;
 const UTTERANCE_MAX_MS = 15_000;
 /** Tras ejecutar algo, un minuto sin necesidad de repetir la palabra. */
-export const FOLLOW_UP_MS = 60_000;
+/**
+ * Ventana de seguimiento: cuanto tiempo acepta ordenes sin repetir el nombre.
+ *
+ * Baja de 60 s a 12 s, y ademas se puede desactivar del todo. Motivo real:
+ * con un minuto abierto, una conversacion normal en la habitacion entra
+ * entera como ordenes. Que KAIROS conteste mientras hablas con alguien no es
+ * un fallo de umbral —una conversacion supera cualquier umbral razonable—
+ * sino de ventana demasiado generosa.
+ *
+ * 12 s cubre el caso util ("kairos, pon musica" ... "sube el volumen") sin
+ * dejar la puerta abierta media conversacion.
+ */
+export const FOLLOW_UP_MS = 12_000;
+
+/**
+ * En modo estricto NO hay ventana de seguimiento: cada orden exige el nombre.
+ * Es lo que quieres con gente delante.
+ */
+export const MODO_ESTRICTO_CLAVE = "kairos.escucha.estricta";
+
+function modoEstricto(): boolean {
+  try {
+    return window.localStorage.getItem(MODO_ESTRICTO_CLAVE) === "si";
+  } catch {
+    return false;
+  }
+}
 
 export type WakeHandlers = {
   onLevel: (rms: number) => void;
@@ -117,13 +143,25 @@ export class WakeListener {
       }
 
       const bajo = texto.toLowerCase();
-      const siguiendo = Date.now() < this.despiertoHasta;
+      const siguiendo = !modoEstricto() && Date.now() < this.despiertoHasta;
+      // El nombre tiene que estar al PRINCIPIO de la frase, no en
+      // cualquier sitio. "...y entonces le dije a kairos que..." mencionaba
+      // el nombre y disparaba una orden con el resto de la frase.
       const idx = this.palabras
         .map((p) => bajo.indexOf(p))
-        .filter((i) => i >= 0)
+        .filter((i) => i >= 0 && i <= 12)
         .sort((a, b) => a - b)[0];
 
       if (idx === undefined && !siguiendo) {
+        this.handlers.onState("espera");
+        continue;
+      }
+
+      // En seguimiento, una frase larga casi nunca es una orden: las ordenes
+      // son cortas. Una parrafada sin el nombre delante es conversacion con
+      // otra persona, y responder a eso es lo mas molesto que puede hacer.
+      if (idx === undefined && texto.length > 90) {
+        console.log("[wake] descartado por largo sin nombre");
         this.handlers.onState("espera");
         continue;
       }

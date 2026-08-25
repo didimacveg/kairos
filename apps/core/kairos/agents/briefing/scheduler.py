@@ -101,7 +101,7 @@ async def _generar(core) -> None:  # type: ignore[no-untyped-def]
             AgentRequest(
                 capability="device.say",
                 actor_id=owner.id,
-                payload={"text": resultado.data["content"]},
+                payload={"text": resultado.data["content"], "motivo": "informe"},
             )
         )
         if not hablado.ok:

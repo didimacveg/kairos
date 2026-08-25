@@ -97,6 +97,7 @@ export function Console({ username, onSignOut }: { username: string; onSignOut: 
   const [despertando, setDespertando] = useState(0);
   const [modoNegro, setModoNegro] = useState(false);
   const [modoChat, setModoChat] = useState(false);
+  const [escuchaEstricta, setEscuchaEstricta] = useState(false);
   const wakeRef = useRef<WakeListener | null>(null);
 
   const logFoot = useRef<HTMLDivElement>(null);
@@ -226,6 +227,26 @@ export function Console({ username, onSignOut }: { username: string; onSignOut: 
     },
     [voiceOn],
   );
+
+  // Modo estricto: cada orden exige decir el nombre. Para cuando hay gente
+  // hablando alrededor.
+  useEffect(() => {
+    try {
+      setEscuchaEstricta(window.localStorage.getItem("kairos.escucha.estricta") === "si");
+    } catch {
+      /* sin almacenamiento, modo normal */
+    }
+  }, []);
+
+  const alternarEstricta = () => {
+    const nuevo = !escuchaEstricta;
+    setEscuchaEstricta(nuevo);
+    try {
+      window.localStorage.setItem("kairos.escucha.estricta", nuevo ? "si" : "no");
+    } catch {
+      /* ignora */
+    }
+  };
 
   // Escucha ambiente: el ÚNICO micrófono de KAIROS. Vive aquí para que se
   // comporte igual en el PC y en el móvil.
@@ -381,6 +402,16 @@ export function Console({ username, onSignOut }: { username: string; onSignOut: 
               onAdd={(item) => setAdjuntos((prev) => [...prev, item].slice(0, 4))}
               onRemove={(id) => setAdjuntos((prev) => prev.filter((a) => a.id !== id))}
             />
+            {escuchaAmbiente && (
+              <button
+                type="button"
+                onClick={alternarEstricta}
+                data-live={escuchaEstricta || undefined}
+                title="Exige decir Kairos en cada orden. Para cuando hay gente hablando."
+              >
+                {escuchaEstricta ? "Estricto" : "Relajado"}
+              </button>
+            )}
             <button
               type="button"
               onClick={() => setEscuchaAmbiente((v) => !v)}

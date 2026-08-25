@@ -27,6 +27,8 @@ class TranscriptionOut(BaseModel):
 
 
 class SpeakIn(BaseModel):
+    # despertar | urgente | informe | recordatorio, o vacio para rutina.
+    motivo: str = ""
     text: str = Field(min_length=1, max_length=1200)
 
 
@@ -82,7 +84,7 @@ async def speak(body: SpeakIn, request: Request, user: MachineOrUser) -> Respons
     """Sintetiza una frase. El cliente pide frase a frase mientras genera."""
     agent = request.app.state.core.registry.find("voice.speak")
     result = await agent.handle(
-        AgentRequest(capability="voice.speak", actor_id=user.id, payload={"text": body.text})
+        AgentRequest(capability="voice.speak", actor_id=user.id, payload={"text": body.text, "motivo": body.motivo})
     )
     if not result.ok:
         raise HTTPException(

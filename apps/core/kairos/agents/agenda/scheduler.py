@@ -84,7 +84,7 @@ async def _disparar(core) -> None:  # type: ignore[no-untyped-def]
         except KeyError:
             return
         await device.handle(AgentRequest(
-            capability="device.say", actor_id=owner.id, payload={"text": texto}
+            capability="device.say", actor_id=owner.id, payload={"text": texto, "motivo": "recordatorio"}
         ))
 
 

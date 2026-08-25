@@ -6,6 +6,9 @@ para el modelo que razona.
 """
 from __future__ import annotations
 
+import deepgram
+import tts
+
 import io
 import os
 import re
@@ -129,6 +132,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(title="KAIROS Voice", version="0.3.0", lifespan=lifespan)
 
 
+@app.get("/voces")
+async def voces() -> dict:
+    """Voces disponibles en la cuenta de ElevenLabs.
+
+    Existe para poder elegir sin salir de KAIROS: pruebas una, pegas su id en
+    el .env y recreas el contenedor.
+    """
+    return {"elevenlabs": await tts.elevenlabs_voces()}
+
+
 @app.get("/health")
 async def health() -> dict[str, Any]:
     return {
@@ -138,6 +151,7 @@ async def health() -> dict[str, Any]:
         "compute_type": COMPUTE_TYPE,
         "speech": "ok" if _piper is not None else "unavailable",
         "voice": PIPER_VOICE,
+        "tts": await tts.estado(),
         "voice_en": PIPER_VOICE_EN if _piper_en else None,
         "pitch": PIPER_PITCH,
         "length_scale": PIPER_LENGTH,
@@ -158,6 +172,15 @@ async def transcribe(audio: UploadFile = File(...)) -> Transcription:
         raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Audio demasiado largo")
 
     started = time.perf_counter()
+    # Deepgram primero: ~300 ms frente a los segundos de Whisper en CPU.
+    # Si falla —sin red, sin clave, error de la API— se sigue al camino
+    # local sin que el usuario note mas que la espera. La regla de la
+    # Fase 1 sigue en pie: KAIROS no depende de Internet para funcionar.
+    if deepgram.disponible():
+        remoto = await deepgram.transcribir(payload, audio.content_type or "")
+        if remoto is not None:
+            return Transcription(**{k: v for k, v in remoto.items() if k != "motor"})
+
     with tempfile.NamedTemporaryFile(suffix=".bin") as handle:
         handle.write(payload)
         handle.flush()
@@ -344,6 +367,14 @@ async def speak(body: SpeechRequest) -> Response:
 
     # Un solo WAV con todos los tramos concatenados: el cliente recibe un
     # audio, no cinco, y no hay huecos entre trozos.
+    # La capa prueba los proveedores en orden y devuelve el primero que
+    # responda. Si todos fallan, sigue el camino local de Piper: KAIROS
+    # habla siempre, aunque peor.
+    remoto = await tts.sintetizar(text, getattr(body, 'motivo', ''))
+    if remoto is not None:
+        audio_bytes, tipo = remoto
+        return Response(content=audio_bytes, media_type=tipo)
+
     tramos = _split_by_language(text) if _piper_en else [(text, False)]
     try:
         piezas: list[bytes] = []
