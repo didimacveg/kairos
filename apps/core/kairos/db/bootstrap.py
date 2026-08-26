@@ -36,6 +36,8 @@ MEMORY_CURATION_2B = [
     "ALTER TABLE memory_items ADD COLUMN IF NOT EXISTS superseded_by UUID",
     "ALTER TABLE memory_items ADD COLUMN IF NOT EXISTS superseded_at TIMESTAMPTZ",
     "CREATE INDEX IF NOT EXISTS ix_memory_items_owner_status ON memory_items (owner_id, status)",
+    "CREATE INDEX IF NOT EXISTS ix_doc_chunks_vec ON document_chunks "
+    "USING hnsw (embedding vector_cosine_ops)",
     "ALTER TABLE memory_items ADD COLUMN IF NOT EXISTS subject VARCHAR(48) NOT NULL DEFAULT ''",
     "CREATE INDEX IF NOT EXISTS ix_memory_items_subject ON memory_items (owner_id, subject, status)",
     "CREATE INDEX IF NOT EXISTS ix_briefings_created ON briefings (created_at DESC)",

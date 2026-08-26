@@ -20,6 +20,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from kairos.core import intenciones
 from kairos.agents.base import AgentRequest, StreamEvent, TraceEvent
 from kairos.agents.registry import AgentRegistry
 from kairos.agents.search.agent import probably_needs_search
@@ -217,7 +218,7 @@ class KairosCore:
         # escritorio, y confundirla con conversacion es lo que pasaba antes.
         from kairos.agents.agenda.agent import es_peticion_de_aviso
 
-        if es_peticion_de_aviso(message):
+        if intenciones.peticion_de_aviso(message):
             texto, traza_av = await self._crear_aviso(db, user, message, correlation_id)
             trace += traza_av
             for event in traza_av:
@@ -237,7 +238,7 @@ class KairosCore:
             )
             return
 
-        if self._pide_informe(message):
+        if intenciones.pide_informe(message):
             texto, traza_inf = await self._generar_informe(db, user, correlation_id)
             trace += traza_inf
             for event in traza_inf:
@@ -257,7 +258,7 @@ class KairosCore:
             )
             return
 
-        peticion_cambio = self._es_peticion_de_cambio(message)
+        peticion_cambio = intenciones.peticion_de_cambio(message)
         if peticion_cambio is not None:
             texto, traza_cambio = await self._proponer_cambio(
                 db, user, peticion_cambio, correlation_id
@@ -282,7 +283,7 @@ class KairosCore:
             )
             return
 
-        if self._huele_a_orden(message):
+        if intenciones.huele_a_orden(message):
             accion_texto, accion_trace = await self._try_action(
                 db, user, message, correlation_id
             )
@@ -513,31 +514,10 @@ class KairosCore:
 
 
     @staticmethod
-    def _es_peticion_de_cambio(mensaje: str) -> str | None:
-        """¿Es una peticion de cambio sobre el propio KAIROS?
-
-        Preambulo EXPLICITO y rigido, igual que por voz. La alternativa —dejar
-        que el modelo decida si una frase es una peticion de cambio— generaria
-        propuestas a partir de conversaciones sobre diseno, que es justo lo
-        contrario de lo que se quiere.
-
-        Devuelve la peticion limpia, o None si no lo es.
-        """
-        import re
-        import unicodedata
-
-        limpio = "".join(
-            c for c in unicodedata.normalize("NFD", mensaje.strip())
-            if unicodedata.category(c) != "Mn"
-        )
-        patron = re.compile(
-            r"^\s*(kairos[,:]?\s*)?"
-            r"(proponte|propon|hazte capaz de|hazte una|aprende a|programate|"
-            r"haz que puedas|modificate para)\s+(?P<que>.{10,900})$",
-            re.I | re.S,
-        )
-        m = patron.match(limpio)
-        return m.group("que").strip() if m else None
+    def _es_peticion_de_cambio(mensaje):  # noqa: ANN001, ANN205
+        """Delega en kairos.core.intenciones. Se conserva el nombre
+        porque hay tests que lo llaman asi."""
+        return intenciones.peticion_de_cambio(mensaje)
 
     async def _proponer_cambio(
         self, db: AsyncSession, user: User, peticion: str, correlation_id: uuid.UUID
@@ -576,35 +556,10 @@ class KairosCore:
         return texto, list(resultado.trace)
 
     @staticmethod
-    def _pide_informe(mensaje: str) -> bool:
-        """¿Esta pidiendo el informe del dia?
-
-        Se reconoce la INTENCION, no una formula: "dame el informe", "que tal
-        va el dia", "resumen de hoy", "ponme al dia". Lo que no vale es
-        hablar SOBRE los informes — "que incluye el informe" es una pregunta,
-        no una peticion.
-        """
-        import re
-        import unicodedata
-
-        limpio = "".join(
-            c for c in unicodedata.normalize("NFD", mensaje.lower())
-            if unicodedata.category(c) != "Mn"
-        ).strip()
-
-        # Preguntas sobre el informe, no peticiones de informe.
-        if re.search(r"\b(que|como|cuando|por que|cual)\b.{0,30}\binforme", limpio):
-            return False
-
-        return bool(re.search(
-            r"\b(dame|damelo|ponme|leeme|cuentame|quiero|necesito|generame|"
-            r"hazme|lanza|repite)\b.{0,25}\b(informe|resumen|parte)\b"
-            r"|\binforme\s+(de[l]?\s+)?(dia|hoy|diario)\b"
-            r"|\bresumen\s+(de[l]?\s+)?(dia|hoy)\b"
-            r"|\bponme al dia\b"
-            r"|\bque tal (va )?(el )?dia\b",
-            limpio,
-        ))
+    def _pide_informe(mensaje):  # noqa: ANN001, ANN205
+        """Delega en kairos.core.intenciones. Se conserva el nombre
+        porque hay tests que lo llaman asi."""
+        return intenciones.pide_informe(mensaje)
 
     async def _generar_informe(
         self, db: AsyncSession, user: User, correlation_id: uuid.UUID
@@ -627,44 +582,10 @@ class KairosCore:
         return resultado.data["content"], list(resultado.trace)
 
     @staticmethod
-    def _huele_a_orden(mensaje: str) -> bool:
-        """Prefiltro barato antes de gastar una llamada al modelo.
-
-        El clasificador de intencion es bueno pero cuesta una ida y vuelta
-        completa, y se pagaba en CADA mensaje — incluido "que hora es", que
-        no puede ser una orden por ningun lado. Ese era el segundo de espera
-        que se notaba en preguntas triviales.
-
-        Aqui solo se descarta lo que es INEQUIVOCAMENTE conversacion: una
-        pregunta que empieza por interrogativo y no menciona nada accionable.
-        Ante la duda, se clasifica: perder medio segundo es mejor que ignorar
-        una orden.
-        """
-        import re
-        import unicodedata
-
-        limpio = "".join(
-            c for c in unicodedata.normalize("NFD", mensaje.lower())
-            if unicodedata.category(c) != "Mn"
-        ).strip(" ?¿!¡.,")
-
-        # Cualquier mencion de algo accionable pasa al clasificador.
-        accionable = re.search(
-            r"\b(perfil|modo|musica|cancion|spotify|volumen|abre|abrir|pon|"
-            r"pausa|para|cierra|reproduce|siguiente|anterior|suena|app|"
-            r"aplicacion|ventana|pantalla|trabajo|estudio|juego)\b",
-            limpio,
-        )
-        if accionable:
-            return True
-
-        # Preguntas puras: interrogativo al principio y nada accionable.
-        pregunta = re.match(
-            r"^(que|quien|cuando|donde|cuanto|cuanta|como|cual|por que|"
-            r"para que|explicame|dime|cuentame|sabes|puedes decirme)\b",
-            limpio,
-        )
-        return not pregunta
+    def _huele_a_orden(mensaje):  # noqa: ANN001, ANN205
+        """Delega en kairos.core.intenciones. Se conserva el nombre
+        porque hay tests que lo llaman asi."""
+        return intenciones.huele_a_orden(mensaje)
 
     async def _crear_aviso(
         self, db: AsyncSession, user: User, texto: str, correlation_id: uuid.UUID
