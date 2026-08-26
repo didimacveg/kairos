@@ -11,6 +11,7 @@ import {
 } from "@/lib/api";
 import { SpeechQueue } from "@/lib/speech";
 import { WakeListener } from "@/lib/wake";
+import { Acciones } from "./Acciones";
 import { Attachments, type Attached } from "./Attachments";
 import { Despertar } from "./Despertar";
 import { ModoChat } from "./ModoChat";
@@ -419,51 +420,25 @@ export function Console({ username, onSignOut }: { username: string; onSignOut: 
                 }
               }}
             />
-            <button
-              type="button"
-              onClick={() => setModoNegro(true)}
-              title="Apaga la pantalla. Escape o 'despierta' para salir."
-            >
-              Negro
-            </button>
-            <button
-              type="button"
-              onClick={() => {
+            <Acciones
+              onNegro={() => setModoNegro(true)}
+              onDespertar={() => {
                 setModoNegro(false);
                 setDespertando((n) => n + 1);
                 void saludar();
               }}
-              title="Lanza la secuencia de arranque sin hablar"
-            >
-              Despertar
-            </button>
-            <button type="button" onClick={() => setModoChat(true)}>
-              Modo chat
-            </button>
+              onChat={() => setModoChat(true)}
+              escuchaAmbiente={escuchaAmbiente}
+              onEscucha={() => setEscuchaAmbiente((v) => !v)}
+              escuchaEstricta={escuchaEstricta}
+              onEstricta={alternarEstricta}
+            />
             <Attachments
               items={adjuntos}
               egress={health?.egress_allowed ?? false}
               onAdd={(item) => setAdjuntos((prev) => [...prev, item].slice(0, 4))}
               onRemove={(id) => setAdjuntos((prev) => prev.filter((a) => a.id !== id))}
             />
-            {escuchaAmbiente && (
-              <button
-                type="button"
-                onClick={alternarEstricta}
-                data-live={escuchaEstricta || undefined}
-                title="Exige decir Kairos en cada orden. Para cuando hay gente hablando."
-              >
-                {escuchaEstricta ? "Estricto" : "Relajado"}
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => setEscuchaAmbiente((v) => !v)}
-              data-live={escuchaAmbiente || undefined}
-              title="KAIROS escucha y responde cuando dices su nombre"
-            >
-              {escuchaAmbiente ? `Oyendo · ${estadoEscucha}` : "Escucha ambiente"}
-            </button>
             <VoiceSession
               active={voiceOn}
               busy={streaming}

@@ -34,7 +34,7 @@ from sqlalchemy import delete, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from kairos.agents.base import Agent, AgentRequest, AgentResponse, TraceEvent
-from kairos.agents.reasoning.providers.base import EmbeddingProvider
+from kairos.agents.reasoning.providers.base import LLMProvider
 from kairos.db.models import Document, DocumentChunk
 from kairos.logging import get_logger
 
@@ -95,7 +95,7 @@ class DocumentosAgent(Agent):
         "documentos.borrar",
     })
 
-    def __init__(self, embedder: EmbeddingProvider) -> None:
+    def __init__(self, embedder: LLMProvider) -> None:
         self._embedder = embedder
 
     async def handle(self, request: AgentRequest, **context: Any) -> AgentResponse:

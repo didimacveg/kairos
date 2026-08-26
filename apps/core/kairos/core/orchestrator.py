@@ -93,8 +93,6 @@ class KairosCore:
 
         apuntes, apuntes_trace = await self._consultar_apuntes(db, user, message)
         trace += apuntes_trace
-        for event in apuntes_trace:
-            yield StreamEvent(type="trace", trace=event)
 
         sources, search_trace = await self._search_if_needed(db, user, message, correlation_id)
         trace += search_trace
