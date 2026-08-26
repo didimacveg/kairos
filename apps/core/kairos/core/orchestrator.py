@@ -90,6 +90,11 @@ class KairosCore:
         trace += retrieval.trace
         memories = retrieval.data.get("hits", []) if retrieval.ok else []
 
+        apuntes, apuntes_trace = await self._consultar_apuntes(db, user, message)
+        trace += apuntes_trace
+        for event in apuntes_trace:
+            yield StreamEvent(type="trace", trace=event)
+
         sources, search_trace = await self._search_if_needed(db, user, message, correlation_id)
         trace += search_trace
 
@@ -679,6 +684,40 @@ class KairosCore:
         if not resultado.ok:
             return f"No he podido anotarlo: {resultado.error}", list(resultado.trace)
         return resultado.data["confirmacion"], list(resultado.trace)
+
+    async def _consultar_apuntes(
+        self, db: AsyncSession, user: User, mensaje: str
+    ) -> tuple[str, list[TraceEvent]]:
+        """Busca en los documentos indexados de Diego.
+
+        Se consulta SIEMPRE que haya documentos, sin palabra clave: si has
+        subido tus apuntes de fisica, quieres que los use al preguntar de
+        fisica, no tener que decirselo cada vez.
+
+        Si no hay coincidencias por encima del umbral, no se anade nada y la
+        respuesta sale como siempre.
+        """
+        try:
+            agente = self._registry.find("documentos.buscar")
+        except KeyError:
+            return "", []
+
+        r = await agente.handle(
+            AgentRequest(
+                capability="documentos.buscar", actor_id=user.id,
+                payload={"consulta": mensaje, "limite": 4},
+            ),
+            db=db,
+        )
+        if not r.ok or not r.data.get("hits"):
+            return "", []
+
+        bloques = "\n\n".join(h["contenido"] for h in r.data["hits"])
+        return (
+            "APUNTES DE " + user.username.upper() + " (usalos si vienen a cuento; "
+            "si contradicen lo que sabes, di que lo hacen en vez de elegir uno):\n\n"
+            + bloques
+        ), list(r.trace)
 
     async def _try_action(
         self, db: AsyncSession, user: User, message: str, correlation_id: uuid.UUID

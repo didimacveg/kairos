@@ -19,6 +19,7 @@ from kairos.agents.agenda.agent import AgendaAgent
 from kairos.agents.briefing.agent import BriefingAgent
 from kairos.agents.curiosidad.agent import CuriosidadAgent
 from kairos.agents.device.agent import DeviceAgent
+from kairos.agents.documentos.agent import DocumentosAgent
 from kairos.agents.forge.agent import ForgeAgent
 from kairos.agents.google.agent import GoogleAgent
 from kairos.agents.intent.agent import IntentAgent
@@ -73,6 +74,7 @@ def build_core() -> KairosCore:
     registry.register(ReasoningAgent(provider=provider))
     registry.register(VoiceAgent())
     registry.register(GoogleAgent())
+    registry.register(DocumentosAgent(embedder=embedder))
     registry.register(WatchAgent(registry=registry))
     registry.register(IntentAgent(provider=provider))
     registry.register(AgendaAgent(provider=provider, registry=registry))

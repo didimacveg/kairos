@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import type { Health } from "@/lib/api";
 import { Briefings } from "./Briefings";
 import { Proposals } from "./Proposals";
+import { Tareas } from "./Tareas";
 import { Sigil } from "./Sigil";
 
 /**
@@ -117,6 +118,7 @@ export function StatusStrip({
 
       <div className="identity">
         <Briefings />
+        <Tareas />
         <Proposals />
         <button
           type="button"

@@ -121,6 +121,26 @@ Devuelve TODOS los ficheros, tambien los que no cambian. Si de verdad no hay
 nada que corregir, devuelvelos tal cual estaban."""
 
 
+SOLO_TEST = """Tienes UNA tarea: escribir el fichero de tests del cambio que
+te dan. Nada mas. No repitas el codigo, no expliques, no propongas mejoras.
+
+El test tiene que:
+- ir en apps/core/tests/test_<algo>.py
+- copiar la forma de los TESTS DE REFERENCIA: mismos imports, misma manera de
+  montar dobles, mismo estilo de nombres y asserts
+- probar el comportamiento NUEVO, no el que ya existia
+- pasar sin salir a Internet: si el codigo hace peticiones HTTP, usa un
+  transporte falso como hacen los tests de referencia
+- cubrir tambien el caso de error, no solo el bueno
+
+FORMATO — texto plano con marcadores, NADA de JSON:
+
+MOTIVO: que cubre el test
+--- FICHERO: apps/core/tests/test_ejemplo.py
+<el fichero entero>
+--- FIN FICHERO"""
+
+
 class SmithAgent(Agent):
     name = "smith"
     capabilities = frozenset({"smith.proponer"})
@@ -198,6 +218,7 @@ class SmithAgent(Agent):
         cambios, motivo = propuesta.cambios, propuesta.motivo
         if cambios:
             cambios = await self._revisar(peticion, cambios, traza)
+            cambios = await self._forzar_test(peticion, cambios, traza)
         if not cambios:
             log.warning('smith.fallo', paso='parsear',
                         respuesta=completion.text[:600])
@@ -330,6 +351,54 @@ class SmithAgent(Agent):
         ]
         elegidos_ref = [c for c in preferidos if c in candidatos]
         return (elegidos_ref or candidatos)[:2]
+
+    async def _forzar_test(
+        self, peticion: str, cambios: list[diffs.Cambio], traza: list[TraceEvent]
+    ) -> list[diffs.Cambio]:
+        """Si el cambio no trae test, se pide APARTE.
+
+        Pedir codigo y test en la misma respuesta no funciona: el modelo gasta
+        su atencion en el codigo y el test se queda fuera. Han hecho falta
+        tres intentos —instrucciones mas duras, tests de referencia en el
+        contexto, una relectura— para confirmarlo.
+
+        Una llamada dedicada, con el codigo ya escrito delante y una sola
+        tarea, si lo produce.
+        """
+        import time as _t
+
+        toca_codigo = [c for c in cambios if not c.ruta.startswith("apps/core/tests/")]
+        if not toca_codigo or any(c.ruta.startswith("apps/core/tests/") for c in cambios):
+            return cambios
+
+        t0 = _t.perf_counter()
+        cuerpo = "\n\n".join(f"=== {c.ruta} ===\n{c.contenido}" for c in toca_codigo)
+        referencias = []
+        for ruta in self._tests_de_ejemplo([]):
+            contenido = repo.leer(ruta)
+            if contenido is not None:
+                referencias.append(f"=== {ruta} ===\n{contenido}")
+
+        try:
+            respuesta = await self._provider.complete([
+                ChatTurn(role="system", content=SOLO_TEST),
+                ChatTurn(role="user", content=(
+                    f"CAMBIO PEDIDO: {peticion}\n\n"
+                    f"CODIGO ESCRITO:\n\n{cuerpo}\n\n"
+                    f"TESTS DE REFERENCIA — copia su forma:\n\n"
+                    + "\n\n".join(referencias)
+                )),
+            ])
+        except Exception:  # noqa: BLE001
+            return cambios
+
+        nuevos = diffs.parsear(respuesta.text).cambios
+        tests = [c for c in nuevos if c.ruta.startswith("apps/core/tests/")]
+        traza.append(TraceEvent(
+            agent=self.name, step="test",
+            detail={"generado": tests[0].ruta if tests else "no consegui escribirlo"},
+            duration_ms=int((_t.perf_counter() - t0) * 1000)))
+        return cambios + tests[:1]
 
     async def _revisar(
         self, peticion: str, cambios: list[diffs.Cambio], traza: list[TraceEvent]

@@ -419,6 +419,24 @@ export function Console({ username, onSignOut }: { username: string; onSignOut: 
                 }
               }}
             />
+            <button
+              type="button"
+              onClick={() => setModoNegro(true)}
+              title="Apaga la pantalla. Escape o 'despierta' para salir."
+            >
+              Negro
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setModoNegro(false);
+                setDespertando((n) => n + 1);
+                void saludar();
+              }}
+              title="Lanza la secuencia de arranque sin hablar"
+            >
+              Despertar
+            </button>
             <button type="button" onClick={() => setModoChat(true)}>
               Modo chat
             </button>

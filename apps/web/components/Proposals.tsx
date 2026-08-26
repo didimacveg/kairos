@@ -59,7 +59,7 @@ export function Proposals() {
     const texto = peticion.trim();
     if (texto.length < 8) return;
     setTrabajando("pidiendo");
-    setAviso("KAIROS está leyendo su código y ensayando el cambio. Tarda unos minutos.");
+    setAviso("KAIROS se ha puesto con ello. La propuesta aparecerá aquí sola en unos minutos.");
     try {
       const r = await fetch("/api/v1/smith/proponer", {
         method: "POST",
@@ -70,11 +70,14 @@ export function Proposals() {
       const cuerpo = await r.json().catch(() => null);
       if (!r.ok) throw new Error(cuerpo?.detail ?? `El núcleo respondió ${r.status}`);
       setPeticion("");
-      setAviso(
-        cuerpo?.tests_verdes
-          ? "Propuesta lista, con los tests en verde."
-          : "Propuesta creada, pero los tests fallan. Léela antes de aprobar.",
-      );
+      // La ruta responde al instante; la propuesta llega despues. Se refresca
+      // cada 20 s durante cinco minutos para que aparezca sola.
+      let intentos = 0;
+      const reloj = setInterval(() => {
+        intentos += 1;
+        void cargar();
+        if (intentos >= 15) clearInterval(reloj);
+      }, 20_000);
       await cargar();
     } catch (err) {
       setAviso(err instanceof Error ? err.message : "No se pudo proponer");

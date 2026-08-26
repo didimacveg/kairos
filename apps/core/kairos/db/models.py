@@ -239,6 +239,46 @@ class Reminder(Base):
     )
 
 
+class Document(Base):
+    """Un documento indexado: apuntes, un tema, un manual."""
+
+    __tablename__ = "documents"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    owner_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    title: Mapped[str] = mapped_column(String(200))
+    subject: Mapped[str] = mapped_column(String(80), default="")
+    chunks: Mapped[int] = mapped_column(Integer, default=0)
+    chars: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
+
+
+class DocumentChunk(Base):
+    """Un trozo de documento con su vector.
+
+    Tabla APARTE de memory_items a proposito: la memoria son cosas sobre
+    Diego, esto son documentos. Mezclarlas haria que un apunte de historia
+    compitiera con sus gustos musicales al buscar, y las dos cosas saldrian
+    peor.
+    """
+
+    __tablename__ = "document_chunks"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("documents.id", ondelete="CASCADE"), index=True
+    )
+    owner_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    content: Mapped[str] = mapped_column(Text)
+    embedding: Mapped[Any] = mapped_column(Vector(EMBEDDING_DIM))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
 class AuditLog(Base):
     """Registro append-only de acciones con relevancia de seguridad."""
 
