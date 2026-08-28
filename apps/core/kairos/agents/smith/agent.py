@@ -141,6 +141,30 @@ MOTIVO: que cubre el test
 --- FIN FICHERO"""
 
 
+CORREGIR = """Los tests de tu cambio han fallado. Arreglalo.
+
+Te doy el codigo que escribiste y la salida REAL de pytest. Lee el error con
+atencion: casi siempre dice exactamente que esta mal y en que linea.
+
+REGLAS:
+- Arregla la CAUSA, no el sintoma. Si un test falla porque el codigo tiene un
+  error, arregla el codigo. Si falla porque el test asume algo que no es
+  cierto, arregla el test. Nunca borres un test para que deje de fallar.
+- Cambia lo minimo. No reescribas lo que ya funcionaba.
+- Si el error es de importacion o de tipos, mira si el nombre que usas existe
+  de verdad en el modulo que dices.
+- Si no entiendes el fallo, dilo en MOTIVO en vez de adivinar. Una propuesta
+  honesta que dice "no se por que falla" es mas util que una que empeora.
+
+Devuelve TODOS los ficheros corregidos en el formato de marcadores:
+
+MOTIVO: que estaba mal y que has cambiado
+RIESGO: bajo|medio|alto
+--- FICHERO: ruta/del/fichero.py
+<fichero entero corregido>
+--- FIN FICHERO"""
+
+
 class SmithAgent(Agent):
     name = "smith"
     capabilities = frozenset({"smith.proponer"})
@@ -278,6 +302,44 @@ class SmithAgent(Agent):
             return AgentResponse.failure(f"El ensayo no pudo ejecutarse: {ensayo.error}")
 
         verde = bool(ensayo.data.get("ok"))
+        intentos = 1
+
+        # CICLO CERRADO: si los tests fallan, se lee el error, se corrige y se
+        # vuelve a ensayar. UNA sola vez: si el segundo intento tampoco pasa,
+        # el problema no es un descuido y hace falta que lo mire una persona.
+        # Reintentar en bucle gastaria llamadas sin converger.
+        if not verde:
+            salida_fallo = "\n\n".join(
+                f"[{p['paso']}]\n{p['salida']}"
+                for p in ensayo.data.get("pasos", []) if not p["ok"]
+            )
+            corregidos = await self._corregir(peticion, cambios, salida_fallo, traza)
+            if corregidos:
+                partes2 = []
+                for cambio in corregidos:
+                    original = repo.leer(cambio.ruta)
+                    trozo = diffs.construir_diff(original, cambio.contenido, cambio.ruta)
+                    if trozo:
+                        partes2.append(trozo)
+                parche2 = "".join(partes2)
+
+                if parche2.strip():
+                    ensayo2 = await forge.handle(AgentRequest(
+                        capability="forge.ensayar",
+                        actor_id=request.actor_id,
+                        payload={"rama": rama, "parche": parche2},
+                    ))
+                    if ensayo2.ok:
+                        traza += ensayo2.trace
+                        # Se queda con el segundo intento solo si MEJORA. Si
+                        # tampoco pasa, se conserva el primero: al menos su
+                        # error ya esta diagnosticado.
+                        if ensayo2.data.get("ok"):
+                            ensayo = ensayo2
+                            cambios = corregidos
+                            parche = parche2
+                            verde = True
+                            intentos = 2
         salida = "\n\n".join(
             f"[{p['paso']}] {'OK' if p['ok'] else 'FALLA'}\n{p['salida']}"
             for p in ensayo.data.get("pasos", [])
@@ -303,7 +365,8 @@ class SmithAgent(Agent):
             diff=ensayo.data.get("diff") or parche,
             rama=rama,
             riesgo=riesgo,
-            tests="VERDE\n\n" + salida if verde else "ROJO\n\n" + salida,
+            tests=("VERDE" + (" (corregido al segundo intento)" if intentos > 1 else "")
+                   + "\n\n" + salida) if verde else "ROJO\n\n" + salida,
         )
 
         log.info("smith.propuesta", rama=rama, verde=verde, ficheros=len(cambios))
@@ -399,6 +462,51 @@ class SmithAgent(Agent):
             detail={"generado": tests[0].ruta if tests else "no consegui escribirlo"},
             duration_ms=int((_t.perf_counter() - t0) * 1000)))
         return cambios + tests[:1]
+
+    async def _corregir(
+        self, peticion: str, cambios: list[diffs.Cambio], salida: str,
+        traza: list[TraceEvent],
+    ) -> list[diffs.Cambio] | None:
+        """Lee el fallo de los tests y arregla el codigo.
+
+        Es lo que cierra el ciclo: hasta ahora una propuesta con los tests en
+        rojo se quedaba en rojo y esperaba a que Diego la leyera. Pero el
+        error de pytest casi siempre dice exactamente que esta mal, y leerlo
+        es justo lo que un modelo sabe hacer.
+
+        Devuelve None si no consigue mejorar nada, para conservar la version
+        original: una correccion que empeora es peor que ninguna.
+        """
+        import time as _t
+
+        t0 = _t.perf_counter()
+        cuerpo = "\n\n".join(f"=== {c.ruta} ===\n{c.contenido}" for c in cambios)
+
+        try:
+            respuesta = await self._provider.complete([
+                ChatTurn(role="system", content=CORREGIR),
+                ChatTurn(role="user", content=(
+                    f"CAMBIO PEDIDO: {peticion}\n\n"
+                    f"CODIGO QUE ESCRIBISTE:\n\n{cuerpo}\n\n"
+                    f"SALIDA DE PYTEST:\n{salida[-6000:]}"
+                )),
+            ])
+        except Exception:  # noqa: BLE001
+            return None
+
+        corregidos = diffs.parsear(respuesta.text).cambios
+        if not corregidos:
+            traza.append(TraceEvent(
+                agent=self.name, step="corregir",
+                detail={"resultado": "no consegui corregirlo"},
+                duration_ms=int((_t.perf_counter() - t0) * 1000)))
+            return None
+
+        traza.append(TraceEvent(
+            agent=self.name, step="corregir",
+            detail={"ficheros": ", ".join(c.ruta for c in corregidos)},
+            duration_ms=int((_t.perf_counter() - t0) * 1000)))
+        return corregidos
 
     async def _revisar(
         self, peticion: str, cambios: list[diffs.Cambio], traza: list[TraceEvent]
