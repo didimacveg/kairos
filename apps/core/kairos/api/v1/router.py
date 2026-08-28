@@ -6,6 +6,7 @@ from kairos.api.v1 import (
     routes_auth,
     routes_briefing,
     routes_chat,
+    routes_conversaciones,
     routes_device,
     routes_documentos,
     routes_files,
@@ -23,6 +24,7 @@ api_router = APIRouter(prefix="/api/v1")
 api_router.include_router(routes_auth.router)
 api_router.include_router(routes_briefing.router)
 api_router.include_router(routes_chat.router)
+api_router.include_router(routes_conversaciones.router)
 api_router.include_router(routes_device.router)
 api_router.include_router(routes_documentos.router)
 api_router.include_router(routes_files.router)

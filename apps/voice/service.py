@@ -87,6 +87,10 @@ class Transcription(BaseModel):
 
 
 class SpeechRequest(BaseModel):
+    # Para que decidir si merece la voz buena. Vacio = rutina.
+    # Sin este campo Pydantic descartaba el motivo al recibirlo, y TODO
+    # el audio caia en Deepgram aunque el presupuesto lo aprobara.
+    motivo: str = ""
     # Sin restricciones de longitud en el esquema: una frase vacia o larga debe
     # producir una respuesta manejable, no un 422 que el cliente no interpreta.
     text: str = ""
@@ -370,7 +374,7 @@ async def speak(body: SpeechRequest) -> Response:
     # La capa prueba los proveedores en orden y devuelve el primero que
     # responda. Si todos fallan, sigue el camino local de Piper: KAIROS
     # habla siempre, aunque peor.
-    remoto = await tts.sintetizar(text, getattr(body, 'motivo', ''))
+    remoto = await tts.sintetizar(text, body.motivo)
     if remoto is not None:
         audio_bytes, tipo = remoto
         return Response(content=audio_bytes, media_type=tipo)

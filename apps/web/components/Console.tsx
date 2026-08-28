@@ -12,6 +12,7 @@ import {
 import { SpeechQueue } from "@/lib/speech";
 import { WakeListener } from "@/lib/wake";
 import { Acciones } from "./Acciones";
+import { Historial } from "./Historial";
 import { Attachments, type Attached } from "./Attachments";
 import { Despertar } from "./Despertar";
 import { ModoChat } from "./ModoChat";
@@ -200,13 +201,13 @@ export function Console({ username, onSignOut }: { username: string; onSignOut: 
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
         // motivo "despertar": va con la voz buena.
-        body: JSON.stringify({ text: `${momento}, Diego.`, motivo: "despertar" }),
+        body: JSON.stringify({ text: `${momento}, señor.`, motivo: "despertar" }),
       });
       if (!r.ok) return;
       const audio = new Audio(URL.createObjectURL(await r.blob()));
       // La sintesis tarda menos que la animacion, asi que se espera a que
       // termine antes de reproducir.
-      setTimeout(() => void audio.play(), 3100);
+      setTimeout(() => void audio.play(), 2650);
     } catch {
       /* sin voz, la animacion sigue valiendo */
     }
@@ -418,6 +419,17 @@ export function Console({ username, onSignOut }: { username: string; onSignOut: 
                   event.preventDefault();
                   send();
                 }
+              }}
+            />
+            <Historial
+              activa={conversationId}
+              onAbrir={(id, mensajes) => {
+                setConversationId(id);
+                setEntries(mensajes);
+              }}
+              onNueva={() => {
+                setConversationId(null);
+                setEntries([]);
               }}
             />
             <Acciones

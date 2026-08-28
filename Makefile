@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 COMPOSE := docker compose
 
-.PHONY: help init up down logs models migrate user test lint fmt reset estado test-integracion test-todo
+.PHONY: curar help init up down logs models migrate user test lint fmt reset estado test-integracion test-todo
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -29,6 +29,9 @@ migrate: ## Crea/actualiza el esquema de base de datos
 
 user: ## Crea el usuario propietario (interactivo)
 	$(COMPOSE) exec core python -m kairos.cli create-user
+
+curar: ## Diagnostica Y ARREGLA lo que pueda arreglarse solo
+	bash scripts/curar.sh
 
 estado: ## Revisa que todo este en pie y dice que arreglar
 	bash scripts/estado.sh
