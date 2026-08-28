@@ -6,84 +6,99 @@ import { createPortal } from "react-dom";
 /**
  * Secuencia de arranque.
  *
- * TERCERA REESCRITURA, esta vez priorizando fluidez sobre espectáculo.
+ * CUARTA VERSIÓN, esta vez buscando limpieza en vez de espectáculo.
  *
- * Las dos anteriores animaban entre 60 y 110 elementos SVG a la vez. Aunque
- * solo se tocaran `transform` y `opacity`, cien capas compuestas por
- * fotograma es demasiado para un navegador que además está sirviendo la
- * aplicación entera.
+ * Las anteriores acumulaban elementos —chispas, rayos, rejillas, barridos—
+ * pensando que más piezas era más impresionante. El resultado era ruido: a
+ * esa velocidad no se distinguía nada y todo competía por la atención.
  *
- * Esta versión anima **once elementos**: cuatro anillos, un núcleo, un
- * destello, la palabra, la línea y el pie. Ni un SVG con decenas de nodos,
- * ni chispas, ni rayos.
+ * Esta tiene SEIS elementos y una idea: un punto que se carga, rompe en un
+ * anillo que se expande, y deja la marca. Nada más.
  *
- * Lo que hace que siga siendo llamativa no es la cantidad de piezas: es el
- * ritmo. La carga que late antes de romper, la escala que se pasa y vuelve,
- * y los paneles entrando escalonados detrás. Eso cuesta cero y es lo que se
- * nota en cámara.
+ * Lo que la hace buena ahora es el TIEMPO, no la cantidad:
+ *   - la carga late tres veces (tensión antes del suceso)
+ *   - la rotura es instantánea (14% de la duración)
+ *   - la marca aparece con calma y se queda (el 60% del tiempo total)
+ *
+ * Una animación de sistema debe leerse como una afirmación, no como fuegos
+ * artificiales.
  */
 
 const PALABRA = "K.A.I.R.O.S";
-const DURACION = 2800;
+const DURACION = 2600;
 
 const CSS = `
 .despertar { position: fixed; inset: 0; z-index: 99999; pointer-events: none;
   display: grid; place-items: center; background: #05070d;
-  animation: dVelo 2.8s cubic-bezier(.22,1,.36,1) forwards !important; }
-@keyframes dVelo { 0%,55%{background:#05070d} 100%{background:rgba(5,7,13,0)} }
+  animation: dVelo 2.6s cubic-bezier(.4,0,.2,1) forwards !important; }
+@keyframes dVelo { 0%,62%{background:#05070d} 100%{background:rgba(5,7,13,0)} }
 
-/* El resplandor: un solo div con gradiente. Sin blur, sin SVG. */
-.despertar .d-luz { position: absolute; width: min(120vmin,120vmin);
-  height: min(120vmin,120vmin); border-radius: 50%;
+/* Un solo resplandor, muy suave. */
+.despertar .d-luz { position: absolute; width: 70vmin; height: 70vmin;
+  border-radius: 50%;
   background: radial-gradient(circle,
-    rgba(255,255,255,.34) 0%, rgba(150,235,255,.24) 9%,
-    rgba(79,216,255,.15) 22%, rgba(140,140,255,.07) 40%,
-    rgba(166,120,255,.03) 58%, transparent 72%);
+    rgba(255,255,255,.20) 0%, rgba(126,230,255,.14) 14%,
+    rgba(79,216,255,.07) 32%, transparent 62%);
   opacity: 0; will-change: transform, opacity;
-  animation: dLuz 2.8s cubic-bezier(.16,1,.3,1) forwards !important; }
+  animation: dLuz 2.6s cubic-bezier(.16,1,.3,1) forwards !important; }
 @keyframes dLuz {
-  0%{transform:scale(.03);opacity:0}
-  12%{transform:scale(.14);opacity:.9}
-  16%{transform:scale(.09);opacity:.7}
-  20%{transform:scale(1.25);opacity:1}
-  42%{transform:scale(.9);opacity:.6}
-  100%{transform:scale(1.5);opacity:0} }
+  0%{transform:scale(.04);opacity:0}
+  9%{transform:scale(.09);opacity:.7}
+  12%{transform:scale(.05);opacity:.5}
+  15%{transform:scale(1);opacity:1}
+  45%{transform:scale(.85);opacity:.5}
+  100%{transform:scale(1.1);opacity:0} }
 
-/* Cuatro anillos. Divs con borde, no SVG. */
+/* El punto que se carga y rompe. */
+.despertar .d-punto { position: absolute; width: 1.2vmin; height: 1.2vmin;
+  border-radius: 50%; background: #fff;
+  box-shadow: 0 0 24px 4px rgba(126,230,255,.9);
+  opacity: 0; will-change: transform, opacity;
+  animation: dPunto 2.6s cubic-bezier(.16,1,.3,1) forwards !important; }
+@keyframes dPunto {
+  0%{transform:scale(0);opacity:0}
+  6%{transform:scale(1);opacity:1}
+  9%{transform:scale(.6);opacity:.8}
+  12%{transform:scale(1.3);opacity:1}
+  15%{transform:scale(28);opacity:0} }
+
+/* Dos anillos finos. Uno rompe, el otro le sigue medio segundo despues. */
 .despertar .d-anillo { position: absolute; border-radius: 50%;
-  width: 26vmin; height: 26vmin; opacity: 0;
+  width: 18vmin; height: 18vmin; opacity: 0;
   will-change: transform, opacity;
-  animation: dAnillo 2.4s cubic-bezier(.16,1,.3,1) forwards !important; }
-@keyframes dAnillo { 0%{transform:scale(.08);opacity:0} 12%{opacity:1}
-  60%{opacity:.6} 100%{transform:scale(4.2);opacity:0} }
+  animation: dAnillo 2.1s cubic-bezier(.12,.9,.25,1) forwards !important; }
+@keyframes dAnillo { 0%{transform:scale(.05);opacity:0} 10%{opacity:1}
+  100%{transform:scale(5.5);opacity:0} }
 
+/* La marca: sin rotaciones ni escalas exageradas. Aparece y se queda. */
 .despertar .d-palabra { position: relative; display: flex; z-index: 2;
-  gap: clamp(.15rem,1vw,.7rem); }
+  gap: clamp(.12rem,.8vw,.55rem); }
 .despertar .d-palabra span { display: inline-block; font-weight: 200; color: #fff;
-  font-size: clamp(1.7rem,7.5vw,5.4rem); letter-spacing: .06em;
+  font-size: clamp(1.6rem,7vw,5rem); letter-spacing: .08em;
   will-change: transform, opacity;
-  text-shadow: 0 0 40px rgba(120,225,255,.9);
-  opacity: 0; animation: dLetra 2.3s cubic-bezier(.16,1,.3,1) forwards !important; }
+  text-shadow: 0 0 32px rgba(126,230,255,.6);
+  opacity: 0; animation: dLetra 2.2s cubic-bezier(.16,1,.3,1) forwards !important; }
 @keyframes dLetra {
-  0%{opacity:0;transform:translate3d(0,44px,0) scale(.5)}
-  22%{opacity:1;transform:translate3d(0,0,0) scale(1.1)}
-  30%{transform:translate3d(0,0,0) scale(1)}
-  78%{opacity:1} 100%{opacity:0;transform:translate3d(0,-16px,0) scale(1.06)} }
+  0%{opacity:0;transform:translate3d(0,14px,0)}
+  16%{opacity:1;transform:translate3d(0,0,0)}
+  82%{opacity:1;transform:translate3d(0,0,0)}
+  100%{opacity:0} }
 
+/* Linea fina bajo la marca. */
 .despertar .d-linea { position: absolute; top: 50%; left: 50%; z-index: 2;
-  translate: -50% 4rem; height: 2px; width: min(38rem,80vw);
+  translate: -50% 3.6rem; height: 1px; width: min(26rem,64vw);
   transform-origin: center; transform: scaleX(0); will-change: transform, opacity;
-  background: linear-gradient(90deg, transparent, #4fd8ff, #fff, #a678ff, transparent);
-  animation: dLinea 2.4s cubic-bezier(.16,1,.3,1) .9s forwards !important; }
-@keyframes dLinea { 0%{transform:scaleX(0);opacity:0} 26%{transform:scaleX(1);opacity:1}
-  74%{opacity:1} 100%{transform:scaleX(1);opacity:0} }
+  background: linear-gradient(90deg, transparent, rgba(126,230,255,.85), transparent);
+  animation: dLinea 2.2s cubic-bezier(.16,1,.3,1) .55s forwards !important; }
+@keyframes dLinea { 0%{transform:scaleX(0);opacity:0} 30%{transform:scaleX(1);opacity:1}
+  80%{opacity:1} 100%{opacity:0} }
 
-.despertar .d-pie { position: absolute; top: 50%; left: 50%; translate: -50% 5.4rem;
-  font-size: clamp(.5rem,1.1vw,.72rem); letter-spacing: .5em; z-index: 2;
-  text-transform: uppercase; color: #7ee6ff; white-space: nowrap; opacity: 0;
-  will-change: opacity;
-  animation: dPie 2.1s ease-out 1.2s forwards !important; }
-@keyframes dPie { 0%{opacity:0} 26%{opacity:1} 74%{opacity:1} 100%{opacity:0} }
+.despertar .d-pie { position: absolute; top: 50%; left: 50%; translate: -50% 4.7rem;
+  font-size: clamp(.46rem,1vw,.64rem); letter-spacing: .55em; z-index: 2;
+  text-transform: uppercase; color: rgba(126,230,255,.75); white-space: nowrap;
+  opacity: 0; will-change: opacity;
+  animation: dPie 2s ease-out .85s forwards !important; }
+@keyframes dPie { 0%{opacity:0} 28%{opacity:1} 80%{opacity:1} 100%{opacity:0} }
 `;
 
 const CSS_ENTRADA = `
@@ -93,23 +108,16 @@ const CSS_ENTRADA = `
 .deck[data-arrancando] .utterance,
 .deck[data-arrancando] .console,
 .deck[data-arrancando] .instruments {
-  animation: dEntra 1s cubic-bezier(.16,1,.3,1) backwards !important;
+  animation: dEntra .9s cubic-bezier(.16,1,.3,1) backwards !important;
   will-change: transform, opacity; }
-.deck[data-arrancando] .stage .sigil { animation-delay: 1.85s !important; }
-.deck[data-arrancando] .strip        { animation-delay: 2.05s !important; }
-.deck[data-arrancando] .log-rail     { animation-delay: 2.2s !important; }
-.deck[data-arrancando] .instruments  { animation-delay: 2.3s !important; }
-.deck[data-arrancando] .utterance    { animation-delay: 2.4s !important; }
-.deck[data-arrancando] .console      { animation-delay: 2.5s !important; }
-@keyframes dEntra { from{opacity:0;transform:translate3d(0,12px,0)} to{opacity:1;transform:none} }
+.deck[data-arrancando] .stage .sigil { animation-delay: 1.7s !important; }
+.deck[data-arrancando] .strip        { animation-delay: 1.9s !important; }
+.deck[data-arrancando] .log-rail     { animation-delay: 2.0s !important; }
+.deck[data-arrancando] .instruments  { animation-delay: 2.1s !important; }
+.deck[data-arrancando] .utterance    { animation-delay: 2.2s !important; }
+.deck[data-arrancando] .console      { animation-delay: 2.3s !important; }
+@keyframes dEntra { from{opacity:0;transform:translate3d(0,10px,0)} to{opacity:1;transform:none} }
 `;
-
-const ANILLOS = [
-  { color: "#7ee6ff", grosor: 3, retardo: 0.18 },
-  { color: "#b98cff", grosor: 2, retardo: 0.26 },
-  { color: "#7ee6ff", grosor: 1.5, retardo: 0.34 },
-  { color: "#ffffff", grosor: 1, retardo: 0.42 },
-];
 
 export function Despertar({ activo }: { activo: boolean }) {
   const [visible, setVisible] = useState(false);
@@ -125,7 +133,7 @@ export function Despertar({ activo }: { activo: boolean }) {
     const id = setTimeout(() => {
       setVisible(false);
       deck?.removeAttribute("data-arrancando");
-    }, DURACION + 800);
+    }, DURACION + 700);
     return () => clearTimeout(id);
   }, [activo]);
 
@@ -137,25 +145,24 @@ export function Despertar({ activo }: { activo: boolean }) {
       {visible && (
         <div className="despertar" aria-hidden="true">
           <div className="d-luz" />
-          {ANILLOS.map((a, i) => (
-            <div
-              key={i}
-              className="d-anillo"
-              style={{
-                border: `${a.grosor}px solid ${a.color}`,
-                animationDelay: `${a.retardo}s`,
-              }}
-            />
-          ))}
+          <div
+            className="d-anillo"
+            style={{ border: "1.5px solid rgba(126,230,255,.9)", animationDelay: ".15s" }}
+          />
+          <div
+            className="d-anillo"
+            style={{ border: "1px solid rgba(185,140,255,.7)", animationDelay: ".32s" }}
+          />
+          <div className="d-punto" />
           <div className="d-palabra">
             {PALABRA.split("").map((letra, i) => (
-              <span key={i} style={{ animationDelay: `${0.85 + i * 0.055}s` }}>
+              <span key={i} style={{ animationDelay: `${0.5 + i * 0.045}s` }}>
                 {letra}
               </span>
             ))}
           </div>
           <div className="d-linea" />
-          <span className="d-pie">todos los sistemas en linea</span>
+          <span className="d-pie">sistemas en linea</span>
         </div>
       )}
     </>,
