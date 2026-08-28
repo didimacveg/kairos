@@ -51,6 +51,52 @@ Reglas:
   naturalidad. Si no, no fuerces."""
 
 
+async def _google(registry, owner_id) -> str:  # type: ignore[no-untyped-def]
+    """Lo que hay manana y el correo sin leer.
+
+    Es lo que convierte el informe de las 22:00 en algo que de verdad quieres
+    oir: saber que tienes manana antes de acostarte, no despues.
+
+    Si Google no esta autorizado, devuelve vacio y el informe sale igual.
+    """
+    from kairos.agents.base import AgentRequest
+    from kairos.agents.google import auth
+
+    if not auth.configurado():
+        return ""
+
+    partes = []
+    try:
+        agenda = registry.find("google.agenda_proximos")
+        r = await agenda.handle(AgentRequest(
+            capability="google.agenda_proximos", actor_id=owner_id,
+            payload={"dias": 2}))
+        if r.ok and r.data.get("eventos"):
+            lineas = [
+                f"- {e['cuando'][:16].replace('T', ' ')} {e['titulo']}"
+                for e in r.data["eventos"][:5]
+            ]
+            partes.append("AGENDA (proximas 48 h):\n" + "\n".join(lineas))
+    except KeyError:
+        pass
+
+    try:
+        correo = registry.find("google.correo_buscar")
+        r = await correo.handle(AgentRequest(
+            capability="google.correo_buscar", actor_id=owner_id,
+            payload={"consulta": "is:unread newer_than:1d", "limite": 6}))
+        if r.ok and r.data.get("correos"):
+            lineas = [
+                f"- {c['de'].split('<')[0].strip()[:35]}: {c['asunto'][:60]}"
+                for c in r.data["correos"]
+            ]
+            partes.append("CORREO SIN LEER (ultimo dia):\n" + "\n".join(lineas))
+    except KeyError:
+        pass
+
+    return "\n\n".join(partes)
+
+
 class BriefingAgent(Agent):
     name = "briefing"
     capabilities = frozenset({"briefing.generate"})
@@ -145,6 +191,7 @@ class BriefingAgent(Agent):
         # Lo que recuerda de el.
         try:
             memoria = self._registry.find("memory.retrieve")
+            google = await _google(self._registry, request.actor_id)
             recuerdos = await memoria.handle(
                 AgentRequest(
                     capability="memory.retrieve",

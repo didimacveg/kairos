@@ -167,6 +167,29 @@ class AgendaAgent(Agent):
             return AgentResponse.failure("No he entendido cuando quieres el aviso")
 
         aviso = str(datos.get("aviso", "")).strip() or texto
+
+        # Un aviso de correo es un tipo propio: no tiene fecha y no se
+        # resuelve buscando en la web, sino mirando el buzon.
+        from kairos.agents.google import vigilante
+
+        if vigilante.es_aviso_de_correo(texto):
+            consulta = vigilante.extraer_remitente(texto)
+            if consulta:
+                fila = Reminder(
+                    owner_id=request.actor_id, kind="correo",
+                    message=aviso[:500], query=consulta,
+                    due_at=None, status="pendiente", source=texto[:300],
+                )
+                db.add(fila)
+                await db.commit()
+                await db.refresh(fila)
+                return AgentResponse(
+                    ok=True,
+                    data={"id": str(fila.id), "tipo": "correo",
+                          "confirmacion": "Anotado. Te aviso cuando llegue."},
+                    trace=[TraceEvent(agent=self.name, step="crear",
+                                      detail={"tipo": "correo", "consulta": consulta})],
+                )
         cuando = None
         if tipo == "fijo":
             cuando = self._fecha(datos.get("cuando"))

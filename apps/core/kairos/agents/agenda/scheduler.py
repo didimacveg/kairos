@@ -38,6 +38,10 @@ async def run_agenda(core) -> None:  # type: ignore[no-untyped-def]
             await _disparar(core)
             if ciclos % RESOLVER_CADA_MIN == 0:
                 await _resolver(core)
+            # El correo se mira cada 5 min: mas seguido gasta cuota de la API
+            # sin ganar nada, y menos hace que un aviso llegue tarde.
+            if ciclos % 5 == 0:
+                await _correo(core)
         except Exception as exc:  # noqa: BLE001
             log.warning("agenda.fallo", error=str(exc))
         ciclos += 1
@@ -100,3 +104,31 @@ async def _resolver(core) -> None:  # type: ignore[no-untyped-def]
         await agente.handle(
             AgentRequest(capability="agenda.resolver", actor_id=owner.id), db=db
         )
+
+
+async def _correo(core) -> None:  # type: ignore[no-untyped-def]
+    """Revisa los avisos de correo y los dice en alto."""
+    from kairos.agents.google import auth, vigilante
+
+    if not auth.configurado():
+        return
+
+    async with get_session_factory()() as db:
+        owner = await _propietario(db)
+        if owner is None:
+            return
+        avisos = await vigilante.revisar(db, owner.id)
+
+    if not avisos:
+        return
+
+    texto = " ".join(avisos)
+    log.info("agenda.correo", cuantos=len(avisos))
+    try:
+        device = core.registry.find("device.say")
+    except KeyError:
+        return
+    await device.handle(AgentRequest(
+        capability="device.say", actor_id=owner.id,
+        payload={"text": texto, "motivo": "recordatorio"},
+    ))
