@@ -56,6 +56,15 @@ function split(text: string): string[] {
   return out;
 }
 
+/**
+ * Cuántas frases se sintetizan por delante de la que suena.
+ *
+ * Dos y no más: cada frase adelantada es audio que quizás no llegue a sonar
+ * si interrumpes, y con la voz de ElevenLabs eso es cuota gastada para nada.
+ * Dos cubre el hueco entre frases sin desperdiciar apenas.
+ */
+const PRECARGA = 2;
+
 export class SpeechQueue {
   private pending: string[] = [];
   private buffer = "";
@@ -120,32 +129,62 @@ export class SpeechQueue {
     return this.playing || this.pending.length > 0;
   }
 
+  /**
+   * Reproduce en orden, pero SINTETIZA POR ADELANTADO.
+   *
+   * Antes esto era estrictamente secuencial: pedir el audio, esperar,
+   * reproducir, pedir el siguiente. Entre frase y frase quedaban 300-500 ms
+   * de silencio — la ida y vuelta al servicio de voz. En una respuesta de
+   * cinco frases, dos segundos de huecos que hacen que KAIROS suene
+   * entrecortado aunque cada frase suene bien.
+   *
+   * Ahora mientras suena la frase 1 ya se están sintetizando la 2 y la 3.
+   * El orden de reproducción sigue siendo estricto: reproducir la 3 antes
+   * que la 2 porque tardó menos haría el audio incomprensible.
+   */
   private async drain(): Promise<void> {
     if (this.playing || this.stopped) return;
     this.playing = true;
 
-    while (this.pending.length > 0 && !this.stopped) {
-      const sentence = this.pending.shift() as string;
-      try {
-        const response = await fetch("/api/v1/voice/speak", {
-          method: "POST",
-          credentials: "same-origin",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text: sentence }),
+    // Peticiones lanzadas, en orden. Cada una es una promesa de audio.
+    const enVuelo: Promise<string | null>[] = [];
+
+    const pedir = (frase: string): Promise<string | null> =>
+      fetch("/api/v1/voice/speak", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: frase }),
+      })
+        .then(async (response) => {
+          if (!response.ok) {
+            const body = (await response.json().catch(() => null)) as
+              | { detail?: unknown }
+              | null;
+            throw new Error(detailToText(body?.detail));
+          }
+          const url = URL.createObjectURL(await response.blob());
+          this.urls.push(url);
+          return url;
+        })
+        .catch((err) => {
+          // Un fallo en UNA frase no calla el resto de la respuesta.
+          this.onFault?.(describe(err));
+          return null;
         });
-        if (!response.ok) {
-          const body = (await response.json().catch(() => null)) as { detail?: unknown } | null;
-          throw new Error(detailToText(body?.detail));
-        }
-        if (this.stopped) break;
-        const url = URL.createObjectURL(await response.blob());
-        this.urls.push(url);
-        await this.play(url);
-      } catch (err) {
-        // Un fallo en UNA frase no debe callar el resto de la respuesta.
-        // Antes se hacia `break` y KAIROS enmudecia a mitad de frase.
-        this.onFault?.(describe(err));
+
+    while ((this.pending.length > 0 || enVuelo.length > 0) && !this.stopped) {
+      // Se rellena el adelanto hasta PRECARGA peticiones simultáneas.
+      while (enVuelo.length <= PRECARGA && this.pending.length > 0) {
+        enVuelo.push(pedir(this.pending.shift() as string));
       }
+
+      const siguiente = enVuelo.shift();
+      if (!siguiente) break;
+
+      const url = await siguiente;
+      if (this.stopped) break;
+      if (url) await this.play(url);
     }
 
     this.playing = false;
