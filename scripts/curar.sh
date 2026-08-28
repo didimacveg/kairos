@@ -36,13 +36,18 @@ echo "=============== CODIGO ==============="
 # Primero el codigo: reiniciar un contenedor con codigo roto solo lo pone a
 # dar vueltas otra vez.
 ROTOS=$(docker compose exec -T core python -c "
-import pathlib, py_compile, sys
+import pathlib, sys
 malos = []
 for p in pathlib.Path('/app/kairos').rglob('*.py'):
     try:
-        py_compile.compile(str(p), doraise=True)
-    except Exception as e:
-        malos.append(f'{p.relative_to(\"/app\")}: {e}')
+        # compile() en memoria, sin escribir bytecode: el contenedor esta en
+        # solo lectura y py_compile fallaba al crear __pycache__, lo que
+        # parecia codigo roto cuando no lo era.
+        compile(p.read_text(encoding='utf-8'), str(p), 'exec')
+    except SyntaxError as e:
+        malos.append(f'{p.relative_to(\"/app\")}: linea {e.lineno} {e.msg}')
+    except Exception:
+        pass
 print('\n'.join(malos))
 " 2>/dev/null || echo "")
 

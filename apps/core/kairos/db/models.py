@@ -296,3 +296,30 @@ class AuditLog(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), index=True
     )
+
+
+class Task(Base):
+    """Encargo que KAIROS hace en segundo plano.
+
+    El resultado se guarda en CADA paso, no solo al final: si el proceso
+    muere a mitad, no se pierde media hora de trabajo.
+    """
+
+    __tablename__ = "tasks"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    owner_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    request: Mapped[str] = mapped_column(Text)
+    material: Mapped[str] = mapped_column(Text, default="")
+    title: Mapped[str] = mapped_column(String(200), default="")
+    plan: Mapped[str] = mapped_column(Text, default="")
+    result: Mapped[str] = mapped_column(Text, default="")
+    # pendiente | planificando | trabajando | lista | fallida
+    status: Mapped[str] = mapped_column(String(16), default="pendiente", index=True)
+    current_step: Mapped[int] = mapped_column(Integer, default=0)
+    total_steps: Mapped[int] = mapped_column(Integer, default=0)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )

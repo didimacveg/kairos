@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "KAIROS OS — nucleo local-first"
 requires-python = ">=3.12"
 dependencies = [
+    "pypdf>=5.1",
   "fastapi>=0.115",
   "uvicorn[standard]>=0.32",
   "sqlalchemy[asyncio]>=2.0",
