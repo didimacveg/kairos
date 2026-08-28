@@ -45,6 +45,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     from kairos.agents.tareas.scheduler import run_tareas
 
     cola = asyncio.create_task(run_tareas(app.state.core))
+
+    from kairos.agents.consciencia.scheduler import run_consciencia
+
+    consciencia = asyncio.create_task(run_consciencia(app.state.core))
     log.info(
         "kairos.started",
         instance=settings.instance_name,
@@ -58,6 +62,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     agenda.cancel()
     curiosidad.cancel()
     cola.cancel()
+    consciencia.cancel()
     with suppress(asyncio.CancelledError):
         await tarea
     with suppress(asyncio.CancelledError):
