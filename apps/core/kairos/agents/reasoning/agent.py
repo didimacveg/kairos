@@ -15,6 +15,7 @@ from zoneinfo import ZoneInfo
 from kairos.agents.base import Agent, AgentRequest, AgentResponse, StreamEvent, TraceEvent
 from kairos.agents.reasoning.providers.base import ChatImage, ChatTurn, LLMProvider
 from kairos.config import get_settings
+from kairos.prompts import REGLAS_ESCRITO, REGLAS_HABLADO, componer
 
 DIAS = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"]
 MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",

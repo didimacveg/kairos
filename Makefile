@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 COMPOSE := docker compose
 
-.PHONY: curar help init up down logs models migrate user test lint fmt reset estado test-integracion test-todo
+.PHONY: test-arranque curar help init up down logs models migrate user test lint fmt reset estado test-integracion test-todo
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -39,8 +39,12 @@ estado: ## Revisa que todo este en pie y dice que arreglar
 test-integracion: ## Tests contra Postgres real (base efimera)
 	docker compose exec core pytest -q -p no:cacheprovider tests/test_integracion_memoria.py
 
-test-todo: ## Unitarios + integracion. Es el que decide si un cambio entra.
+test-arranque: ## Verifica que KAIROS ARRANCA, no solo que compila
+	docker compose exec core pytest -q -p no:cacheprovider tests/test_integracion_arranque.py
+
+test-todo: ## Unitarios + arranque + integracion. Decide si un cambio entra.
 	$(MAKE) test
+	$(MAKE) test-arranque
 	$(MAKE) test-integracion
 
 test: ## Ejecuta la suite de tests del core

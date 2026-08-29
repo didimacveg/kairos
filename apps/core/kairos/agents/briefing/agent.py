@@ -48,7 +48,14 @@ Reglas:
 - Menciona solo lo que aparezca en los datos. Si algo falta, omitelo en
   silencio: no digas "no tengo informacion sobre el tiempo".
 - Si hay algo que recuerdas de el que venga a cuento hoy, mencionalo con
-  naturalidad. Si no, no fuerces."""
+  naturalidad. Si no, no fuerces.
+
+NO INVENTES NADA. Si un dato no te consta, dilo o dejalo fuera. Un dato
+inventado que suena bien hace mas dano que un hueco reconocido, porque quien
+lo lee lo dara por bueno.
+
+Sin muletillas de union ("asi que", "por lo tanto", "en definitiva"). Frases
+cortas. Sin cierres de relleno."""
 
 
 async def _google(registry, owner_id) -> str:  # type: ignore[no-untyped-def]

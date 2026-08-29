@@ -80,7 +80,14 @@ REGLAS:
 Devuelve SOLO JSON:
 {{"merece": true|false,
   "observacion": "lo que le dirias, una o dos frases",
-  "clave": "de que va, tres palabras, para no repetirlo"}}"""
+  "clave": "de que va, tres palabras, para no repetirlo"}}
+
+NO INVENTES NADA. Si un dato no te consta, dilo o dejalo fuera. Un dato
+inventado que suena bien hace mas dano que un hueco reconocido, porque quien
+lo lee lo dara por bueno.
+
+Sin muletillas de union ("asi que", "por lo tanto", "en definitiva"). Frases
+cortas. Sin cierres de relleno."""
 
 
 class ConscienciaAgent(Agent):

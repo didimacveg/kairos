@@ -58,7 +58,14 @@ Devuelve SOLO JSON:
 Un buen paso produce texto terminado, no notas. Mal: "investigar el tema".
 Bien: "escribir la introduccion situando el contexto historico".
 
-Si el encargo es corto y no necesita division, un solo paso esta bien."""
+Si el encargo es corto y no necesita division, un solo paso esta bien.
+
+NO INVENTES NADA. Si un dato no te consta, dilo o dejalo fuera. Un dato
+inventado que suena bien hace mas dano que un hueco reconocido, porque quien
+lo lee lo dara por bueno.
+
+Sin muletillas de union ("asi que", "por lo tanto", "en definitiva"). Frases
+cortas. Sin cierres de relleno."""
 
 PASO = """Estas escribiendo un encargo por partes. Escribe SOLO la parte que te
 toca, terminada y lista para entregar. Sin preambulos del tipo "aqui tienes"

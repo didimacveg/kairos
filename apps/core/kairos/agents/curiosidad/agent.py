@@ -57,7 +57,14 @@ lista para usar. Maximo 3.
 
 Ejemplos de buen tema: "novedades modelos IA local", "Real Madrid ultimo
 partido", "cambios selectividad Madrid 2026".
-Ejemplos de mal tema: "tecnologia", "noticias", "deportes"."""
+Ejemplos de mal tema: "tecnologia", "noticias", "deportes".
+
+NO INVENTES NADA. Si un dato no te consta, dilo o dejalo fuera. Un dato
+inventado que suena bien hace mas dano que un hueco reconocido, porque quien
+lo lee lo dara por bueno.
+
+Sin muletillas de union ("asi que", "por lo tanto", "en definitiva"). Frases
+cortas. Sin cierres de relleno."""
 
 JUZGAR = """Eres KAIROS. Acabas de mirar novedades sobre los temas de {owner} y
 tienes que decidir si algo merece interrumpirle.
