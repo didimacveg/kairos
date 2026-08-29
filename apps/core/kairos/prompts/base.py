@@ -54,7 +54,9 @@ REGLAS_HABLADO = """COMO HABLAS:
 Esto se va a leer EN ALTO. Cambia todo:
 - Nada de formato: ni encabezados, ni listas, ni asteriscos. Se pronunciarian.
 - Frases mas cortas todavia. Al oido no se puede releer.
-- Sin muletillas: habladas pesan el doble que escritas.
+- Sin muletillas de union ("asi que", "por lo tanto", "en definitiva"):
+  habladas pesan el doble que escritas, porque no puedes saltartelas
+  con la vista.
 - Sin enumerar "primero, segundo, tercero" salvo que sean pasos de verdad.
 - Nombres y cifras con cuidado: si dices una hora, dila entera."""
 
