@@ -207,7 +207,9 @@ export function Console({ username, onSignOut }: { username: string; onSignOut: 
       const audio = new Audio(URL.createObjectURL(await r.blob()));
       // La sintesis tarda menos que la animacion, asi que se espera a que
       // termine antes de reproducir.
-      setTimeout(() => void audio.play(), 2650);
+      // Suena en cuanto se pide: quien decide CUANDO es la animacion,
+      // que llama a saludar() en el momento justo.
+      void audio.play();
     } catch {
       /* sin voz, la animacion sigue valiendo */
     }
@@ -355,8 +357,19 @@ export function Console({ username, onSignOut }: { username: string; onSignOut: 
         adjuntos={adjuntos}
         onFoto={(f) => void subirFoto(f)}
       />
-      <ModoNegro activo={modoNegro} onSalir={() => setModoNegro(false)} />
-      <Despertar activo={despertando > 0} key={despertando} />
+      <ModoNegro
+        activo={modoNegro}
+        onSalir={() => setModoNegro(false)}
+        onDespertar={() => {
+          setModoNegro(false);
+          setDespertando((n) => n + 1);
+        }}
+      />
+      <Despertar
+        activo={despertando > 0}
+        key={despertando}
+        onMarca={() => void saludar()}
+      />
       <StatusStrip
         health={health}
         username={username}
@@ -437,7 +450,6 @@ export function Console({ username, onSignOut }: { username: string; onSignOut: 
               onDespertar={() => {
                 setModoNegro(false);
                 setDespertando((n) => n + 1);
-                void saludar();
               }}
               onChat={() => setModoChat(true)}
               escuchaAmbiente={escuchaAmbiente}

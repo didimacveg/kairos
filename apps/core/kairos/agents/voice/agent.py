@@ -96,7 +96,12 @@ class VoiceAgent(Agent):
         started = time.perf_counter()
         try:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
-                response = await client.post(f"{self._base_url}/speak", json={"text": text})
+                # El motivo decide si va con la voz buena. Sin reenviarlo, TODO
+                # el audio caia en Deepgram aunque el presupuesto lo aprobara.
+                response = await client.post(
+                    f"{self._base_url}/speak",
+                    json={"text": text, "motivo": request.payload.get("motivo", "")},
+                )
                 if response.status_code >= 400:
                     detail = response.json().get("detail", response.text)
                     return AgentResponse.failure(f"Servicio de voz: {detail}")
