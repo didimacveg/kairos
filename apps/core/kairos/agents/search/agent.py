@@ -27,6 +27,8 @@ from urllib.parse import unquote
 
 import httpx
 
+from kairos.agents.search import brave
+
 from kairos.agents.base import Agent, AgentRequest, AgentResponse, TraceEvent
 from kairos.config import get_settings
 
@@ -89,6 +91,31 @@ class SearchAgent(Agent):
         limit = int(request.payload.get("limit", self._settings.search_results))
 
         started = time.perf_counter()
+
+        # Brave devuelve JSON y codigos de estado reales. El raspado de
+        # DuckDuckGo devolvia HTTP 202 con su pagina de inicio y el agente lo
+        # daba por bueno: KAIROS decia "no tengo informacion" teniendo la
+        # busqueda activada, durante meses.
+        if brave.disponible():
+            resultados = await brave.buscar(query, limit)
+            if resultados is None:
+                return AgentResponse.failure(
+                    "La busqueda web no responde. Revisa KAIROS_BRAVE_KEY o la cuota."
+                )
+            return AgentResponse(
+                ok=True,
+                data={"results": resultados, "query": query},
+                trace=[
+                    TraceEvent(
+                        agent=self.name,
+                        step="buscar",
+                        detail={"consulta": query[:80], "encontrados": len(resultados),
+                                "proveedor": "brave"},
+                        duration_ms=int((time.perf_counter() - started) * 1000),
+                    )
+                ],
+            )
+
         try:
             async with httpx.AsyncClient(timeout=self._timeout, follow_redirects=True) as client:
                 response = await client.post(
@@ -100,6 +127,14 @@ class SearchAgent(Agent):
                 results = parse_results(response.text, limit)
         except httpx.HTTPError as exc:
             return AgentResponse.failure(f"No se pudo buscar: {type(exc).__name__}")
+
+        if not results:
+            # Un raspador que no extrae nada casi nunca es "no hay
+            # resultados": es que la pagina cambio o esta bloqueando. Decirlo
+            # permite distinguir un hueco real de una averia.
+            return AgentResponse.failure(
+                "El buscador no devolvio resultados utilizables"
+            )
 
         return AgentResponse(
             ok=True,

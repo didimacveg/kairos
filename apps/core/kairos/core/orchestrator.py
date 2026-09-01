@@ -500,7 +500,15 @@ class KairosCore:
             )
         )
         if not result.ok:
-            return [], []
+            # La busqueda fallo, no es que no haya resultados. El modelo tiene
+            # que poder decir "he intentado buscar y no he podido" en vez de
+            # "no tengo informacion de hoy", que suena a que ni lo intento.
+            return [], [
+                TraceEvent(
+                    agent="search", step="fallo",
+                    detail={"error": result.error or "sin detalle"},
+                )
+            ]
 
         sources = result.data.get("results", [])
         if sources:
