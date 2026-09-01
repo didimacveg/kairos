@@ -185,7 +185,7 @@ export function Console({ username, onSignOut }: { username: string; onSignOut: 
             return next;
           });
         },
-      }, idsAdjuntos);
+      }, idsAdjuntos, speak);
     },
     [draft, streaming, conversationId, adjuntos],
   );
@@ -304,9 +304,6 @@ export function Console({ username, onSignOut }: { username: string; onSignOut: 
             return;
           }
           if (esDespertar(texto)) {
-            // El saludo suena JUSTO al terminar la animacion, no durante:
-            // hablar por encima de la secuencia estropea las dos cosas.
-            void saludar();
             // Salir del negro y arrancar la secuencia son lo mismo: la
             // animacion nace sobre el negro y lo disuelve al terminar.
             setModoNegro(false);

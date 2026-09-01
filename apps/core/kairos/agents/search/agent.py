@@ -149,6 +149,29 @@ SABE_SIN_BUSCAR = re.compile(
 )
 
 
+# Preguntas por actualidad que no nombran ningun tema. Sin esto, "que
+# novedades hay hoy" no disparaba busqueda y KAIROS respondia que no tiene
+# acceso a informacion en tiempo real — teniendolo.
+ACTUALIDAD = re.compile(
+    r"\b(novedad(es)?|noticias?|actualidad|ultima hora|que ha pasado|"
+    r"que esta pasando|que hay de nuevo|ponme al tanto)\b",
+    re.I,
+)
+
+
+# Sucesos y entidades cambiantes. El modelo NO puede saber esto por su cuenta
+# aunque la pregunta no diga "hoy": preguntar por un incendio, un partido o el
+# precio de algo es preguntar por el estado del mundo ahora.
+SUCESOS = re.compile(
+    r"\b(incendio|terremoto|inundacion|accidente|huelga|manifestacion|"
+    r"atentado|apagon|temporal|dana|alerta|emergencia|"
+    r"partido|resultado|marcador|fichaje|dimision|eleccion|"
+    r"lanzamiento|despegue|estreno|version|actualizacion|"
+    r"precio|cotizacion|bolsa|prevision|pronostico)\w*\b",
+    re.I,
+)
+
+
 def probably_needs_search(message: str) -> bool:
     """Heuristica barata: ¿esto huele a pregunta sobre el mundo de hoy?
 
@@ -158,4 +181,8 @@ def probably_needs_search(message: str) -> bool:
     """
     if SABE_SIN_BUSCAR.search(message):
         return False
+    if ACTUALIDAD.search(message):
+        return True
+    if SUCESOS.search(message):
+        return True
     return bool(NEEDS_SEARCH.search(message))

@@ -166,7 +166,14 @@ class ReasoningAgent(Agent):
         message: str = payload["message"]
 
         settings = self._settings
-        system = SYSTEM_PROMPT.format(owner=owner)
+        # La identidad y las reglas de estilo van DELANTE del prompt de
+        # tarea: un modelo aplica peor las reglas que llegan despues del
+        # problema concreto. Y hablado se escribe distinto que escrito.
+        system = componer(
+            REGLAS_HABLADO if payload.get("hablado") else REGLAS_ESCRITO,
+            owner=owner,
+        )
+        system += "\n\n" + SYSTEM_PROMPT.format(owner=owner)
         system += f"\n\nAhora mismo son las {ahora(settings.timezone)} ({settings.timezone}).\n"
 
         sources: list[dict[str, str]] = payload.get("sources", [])

@@ -159,6 +159,33 @@ class ConscienciaAgent(Agent):
                                   duration_ms=int((time.perf_counter() - started) * 1000))])
 
         clave = str(datos.get("clave", "")).strip().lower()
+
+        # El registro en memoria se pierde en cada reinicio del nucleo, y
+        # KAIROS reinicia a menudo. Los informes ya viven en Postgres: se
+        # comprueba ahi si algo parecido se dijo en los ultimos cuatro dias.
+        if clave:
+            from sqlalchemy import func as _func
+
+            palabras = [p for p in clave.split() if len(p) > 4][:3]
+            if palabras:
+                dicho = (
+                    await db.execute(
+                        select(Briefing.id).where(
+                            Briefing.owner_id == request.actor_id,
+                            Briefing.created_at
+                            > datetime.now(timezone.utc) - timedelta(days=4),
+                            *[
+                                _func.lower(Briefing.content).contains(p)
+                                for p in palabras
+                            ],
+                        ).limit(1)
+                    )
+                ).scalar_one_or_none()
+                if dicho is not None:
+                    return AgentResponse(
+                        ok=True,
+                        data={"merece": False, "motivo": "ya lo dijo hace poco"},
+                    )
         # No repetir la misma observacion en cuatro dias: una relacion que
         # sigue siendo cierta no vuelve a ser noticia por seguir siendo cierta.
         if clave and self._dichas.get(clave, datetime.min.replace(tzinfo=timezone.utc)) > (

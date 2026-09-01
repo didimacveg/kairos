@@ -21,10 +21,10 @@ type Conv = {
  */
 const CSS = `
 .hist { position: relative; }
-.hist-panel { position: absolute; top: calc(100% + .6rem); right: 0; z-index: 30;
+.hist-panel { position: absolute; bottom: calc(100% + .6rem); right: 0; z-index: 30;
   width: min(28rem, 92vw); max-height: 70vh; overflow-y: auto;
   background: var(--panel); border: 1px solid var(--rule-bright);
-  padding: .5rem; box-shadow: 0 24px 60px -20px rgba(0,0,0,.92); }
+  padding: .5rem; box-shadow: 0 -24px 60px -20px rgba(0,0,0,.92); }
 .hist-cab { font-family: var(--data); font-size: .5rem;
   letter-spacing: var(--track-label); text-transform: uppercase;
   color: var(--faint); padding: .5rem .6rem; border-bottom: 1px solid var(--rule);

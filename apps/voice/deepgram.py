@@ -1,3 +1,7 @@
+
+
+
+
 """Deepgram: transcripcion y voz por API.
 
 Por que existe: Whisper y Piper corren en CPU y se llevan cuatro de los siete
@@ -88,14 +92,21 @@ async def transcribir(audio: bytes, content_type: str) -> dict[str, Any] | None:
 
     texto = (alt.get("transcript") or "").strip()
     confianza = float(alt.get("confidence") or 0.0)
+    duracion = float((cuerpo.get("metadata") or {}).get("duration") or 0.0)
+
     return {
         "text": texto,
+        "language": IDIOMA,
+        "duration_s": duracion,
+        "latency_ms": int(duracion * 100),
+        "model": f"deepgram/{MODELO_STT}",
+        "segments": len(alt.get("words") or []) and 1 or (1 if texto else 0),
         # Deepgram da confianza 0-1; el resto del sistema espera un logprob
-        # negativo. Se traduce para no cambiar el contrato del servicio.
-        "avg_logprob": (confianza - 1.0) * 2,
-        "no_speech": not texto,
+        # negativo donde mas alto es mejor. Se traduce para no cambiar el
+        # contrato del servicio.
+        "confidence": (confianza - 1.0) * 2,
         "low_confidence": bool(texto) and confianza < 0.55,
-        "motor": f"deepgram/{MODELO_STT}",
+        "no_speech": not texto,
     }
 
 

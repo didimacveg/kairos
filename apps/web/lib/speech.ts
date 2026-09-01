@@ -34,17 +34,20 @@ function describe(err: unknown): string {
 }
 
 const SENTENCE_END = /([.!?…]+|\n)/;
-const MIN_CHARS = 12;
+const MIN_CHARS = 40;
 
 
-const MAX_SPOKEN = 400;
+const MAX_SPOKEN = 700;
 
 /** Trocea un fragmento demasiado largo por comas, sin partir palabras. */
 function split(text: string): string[] {
   if (text.length <= MAX_SPOKEN) return [text];
   const out: string[] = [];
   let current = "";
-  for (const part of text.split(/(?<=,)\s*/)) {
+  // Se parte por punto y coma o dos puntos, nunca por comas: una coma no
+  // es final de frase y cortar ahi hace que la voz baje el tono a media
+  // idea, que es lo que sonaba antinatural.
+  for (const part of text.split(/(?<=[;:])\s*/)) {
     if ((current + part).length > MAX_SPOKEN && current) {
       out.push(current.trim());
       current = part;

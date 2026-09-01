@@ -109,6 +109,7 @@ class KairosCore:
                     "memories": memories,
                     "history": history,
                     "sources": sources,
+                    "hablado": hablado,
                     "images": await self._load_images(db, user, attachments or []),
                 },
             )
@@ -184,6 +185,9 @@ class KairosCore:
         message: str,
         conversation_id: uuid.UUID | None,
         attachments: list[uuid.UUID] | None = None,
+        # Lo que se lee en alto y lo que se lee en pantalla no se escriben
+        # igual: hablado, el formato se pronuncia y suena ridiculo.
+        hablado: bool = False,
     ) -> AsyncIterator[StreamEvent]:
         correlation_id = uuid.uuid4()
         trace: list[TraceEvent] = []

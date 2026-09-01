@@ -139,6 +139,7 @@ export function streamChat(
   conversationId: string | null,
   handlers: StreamHandlers,
   attachments: string[] = [],
+  hablado = false,
 ): () => void {
   const controller = new AbortController();
 
@@ -149,7 +150,14 @@ export function streamChat(
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message, conversation_id: conversationId, attachments }),
+        body: JSON.stringify({
+          message,
+          conversation_id: conversationId,
+          attachments,
+          // El nucleo escribe distinto si la respuesta se va a leer
+          // en alto: sin listas, sin formato, frases mas cortas.
+          hablado,
+        }),
         signal: controller.signal,
       });
 
