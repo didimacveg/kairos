@@ -1,5 +1,7 @@
 # KAIROS
 
+https://github.com/user-attachments/assets/a8d38309-eaa0-48ab-875d-b1c7ae29d451
+
 A local-first personal AI assistant. Runs on my own machine, controls my
 desktop, remembers what matters, and decides on its own when something is
 worth telling me.
