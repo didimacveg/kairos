@@ -69,3 +69,27 @@ async def close(body: WindowIn, request: Request, user: CurrentUser, db: DbSessi
     return await _run(
         request, db, user, "device.close", {"pattern": body.pattern, "confirm": body.confirm}
     )
+
+
+class Brillo(BaseModel):
+    # Sin nivel, se restaura el que habia antes.
+    nivel: int | None = None
+
+
+@router.post("/brillo")
+async def brillo(b: Brillo, request: Request, user: CurrentUser) -> dict:
+    """Baja o restaura el brillo de la pantalla.
+
+    Para las tomas de video: un panel encendido a negro sigue emitiendo luz y
+    en camara se ve gris. Con el brillo al minimo, el negro es negro.
+    """
+    try:
+        agente = request.app.state.core.registry.find("device.brillo")
+    except KeyError:
+        return {"ok": False, "motivo": "el puente no esta activo"}
+
+    r = await agente.handle(
+        AgentRequest(capability="device.brillo", actor_id=user.id,
+                     payload={"nivel": b.nivel})
+    )
+    return {"ok": r.ok, **(r.data if r.ok else {"error": r.error})}

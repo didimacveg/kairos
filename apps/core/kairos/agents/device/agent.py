@@ -29,7 +29,7 @@ class DeviceAgent(Agent):
     name = "device"
     capabilities = frozenset(
         {"device.profile", "device.focus", "device.close", "device.status",
-         "device.music", "device.app", "device.say", "device.open_urls"}
+         "device.music", "device.app", "device.say", "device.brillo", "device.open_urls"}
     )
 
     def __init__(self, base_url: str | None = None, token: str | None = None) -> None:
@@ -79,6 +79,12 @@ class DeviceAgent(Agent):
             if not urls:
                 return AgentResponse.failure("Sin URLs que abrir")
             ok, body = await self._call("/open-urls", {"urls": urls[:6]})
+        elif capability == "device.brillo":
+            nivel = request.payload.get("nivel")
+            if nivel is None:
+                ok, body = await self._call("/brillo/restaurar", {})
+            else:
+                ok, body = await self._call("/brillo", {"nivel": int(nivel)})
         elif capability == "device.app":
             clave = (request.payload.get("key") or "").strip()
             if not clave:

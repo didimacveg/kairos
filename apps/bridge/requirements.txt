@@ -7,3 +7,4 @@ pystray>=0.19
 pillow>=10.0
 sounddevice>=0.4.6
 numpy>=1.26
+monitorcontrol>=3.1

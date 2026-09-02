@@ -265,6 +265,11 @@ class UrlRequest(BaseModel):
     urls: list[str] = []
 
 
+class BrilloRequest(BaseModel):
+    # 0 a 100. El valor anterior se guarda para poder restaurarlo.
+    nivel: int = 0
+
+
 class AppRequest(BaseModel):
     # Clave del catalogo, NO una ruta ni un comando. El puente traduce la
     # clave a lo que el usuario haya declarado; una clave desconocida se
@@ -358,6 +363,87 @@ async def open_urls(body: UrlRequest) -> dict[str, Any]:
         abiertas.append(limpia)
         time.sleep(0.4)
     return {"ok": True, "abiertas": len(abiertas), "result": f"{len(abiertas)} pestanas abiertas"}
+
+
+# Brillo por DDC/CI. WMI solo funciona en portatiles; los monitores externos
+# solo responden por el canal de datos del cable de video.
+#
+# Niveles por defecto de Diego, medidos a ojo en su puesto:
+#   KG241Y S (Acer, principal)  40
+#   GN02     (secundario)       85
+BRILLO_DEFECTO = [40, 85]
+_restauracion: Any = None
+
+
+def _fijar_brillo(niveles: list[int]) -> dict[str, Any]:
+    """Aplica un brillo por monitor. `niveles[i]` es el monitor i.
+
+    Si hay menos valores que monitores, el ultimo se repite: pasar [0] apaga
+    todos, que es lo que quiere el modo negro.
+    """
+    try:
+        from monitorcontrol import get_monitors
+    except ImportError:
+        return {"ok": False, "error": "falta monitorcontrol"}
+
+    aplicados = []
+    try:
+        for i, monitor in enumerate(get_monitors()):
+            nivel = niveles[i] if i < len(niveles) else niveles[-1]
+            nivel = max(0, min(100, int(nivel)))
+            try:
+                with monitor:
+                    monitor.set_luminance(nivel)
+                aplicados.append(nivel)
+            except Exception as exc:  # noqa: BLE001
+                # Un monitor sin DDC/CI activado no debe impedir que el otro
+                # cambie. Se anota y se sigue.
+                print(f"[brillo] monitor {i}: {type(exc).__name__}")
+                aplicados.append(None)
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": f"{type(exc).__name__}"}
+
+    return {"ok": any(a is not None for a in aplicados), "niveles": aplicados}
+
+
+@app.post("/brillo", dependencies=[Depends(authorize)])
+async def brillo(body: BrilloRequest) -> dict[str, Any]:
+    """Cambia el brillo de todos los monitores.
+
+    Para las tomas de video: un panel encendido a negro sigue emitiendo luz y
+    en camara se ve gris. Con el brillo a cero, el negro es negro.
+    """
+    global _restauracion
+
+    if _restauracion is not None:
+        _restauracion.cancel()
+        _restauracion = None
+
+    nivel = max(0, min(100, body.nivel))
+    resultado = _fijar_brillo([nivel])
+
+    # Al subir al maximo (el destello de la animacion), se vuelve solo a los
+    # valores de trabajo pasados unos segundos. Sin esto habria que acordarse
+    # de restaurarlo a mano despues de cada toma.
+    if nivel >= 100:
+        import threading
+
+        _restauracion = threading.Timer(5.0, lambda: _fijar_brillo(BRILLO_DEFECTO))
+        _restauracion.daemon = True
+        _restauracion.start()
+
+    return resultado
+
+
+@app.post("/brillo/restaurar", dependencies=[Depends(authorize)])
+async def restaurar_brillo() -> dict[str, Any]:
+    """Devuelve el brillo a los valores de trabajo."""
+    global _restauracion
+
+    if _restauracion is not None:
+        _restauracion.cancel()
+        _restauracion = None
+    return _fijar_brillo(BRILLO_DEFECTO)
 
 
 @app.post("/app", dependencies=[Depends(authorize)])
