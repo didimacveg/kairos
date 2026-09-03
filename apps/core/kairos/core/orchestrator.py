@@ -260,6 +260,25 @@ class KairosCore:
             )
             return
 
+        from kairos.agents.rutinas.agent import peticion_de_guardar
+
+        nombre_rutina = peticion_de_guardar(message)
+        if nombre_rutina:
+            texto, traza_r = await self._rutina(
+                db, user, "rutinas.guardar", {"nombre": nombre_rutina}, correlation_id)
+            trace += traza_r
+            for event in traza_r:
+                yield StreamEvent(type="trace", trace=event)
+            yield StreamEvent(type="token", text=texto)
+            await self._persist_turn(
+                db, conversation_id=conversation.id, user_message=message,
+                reply=texto, model="rutinas", latency_ms=0)
+            yield StreamEvent(type="end", data={
+                "conversation_id": str(conversation.id), "model": "rutinas",
+                "latency_ms": 0, "local": False, "memories": memories,
+                "trace": [t.model_dump(mode="json") for t in trace]})
+            return
+
         peticion_cambio = intenciones.peticion_de_cambio(message)
         if peticion_cambio is not None:
             texto, traza_cambio = await self._proponer_cambio(
@@ -649,6 +668,28 @@ class KairosCore:
             "si contradicen lo que sabes, di que lo hacen en vez de elegir uno):\n\n"
             + bloques
         ), list(r.trace)
+
+    async def _rutina(
+        self, db: AsyncSession, user: User, capacidad: str,
+        payload: dict, correlation_id: uuid.UUID,
+    ) -> tuple[str, list[TraceEvent]]:
+        """Guarda o ejecuta una rutina y devuelve que decir."""
+        try:
+            agente = self._registry.find(capacidad)
+        except KeyError:
+            return "Las rutinas no estan activas.", []
+
+        r = await agente.handle(
+            AgentRequest(capability=capacidad, actor_id=user.id,
+                         correlation_id=correlation_id, payload=payload),
+            db=db,
+        )
+        if not r.ok:
+            return r.error or "No he podido.", list(r.trace)
+        return (
+            r.data.get("confirmacion") or r.data.get("resumen") or "Hecho.",
+            list(r.trace),
+        )
 
     async def _try_action(
         self, db: AsyncSession, user: User, message: str, correlation_id: uuid.UUID

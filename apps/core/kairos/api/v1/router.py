@@ -14,6 +14,7 @@ from kairos.api.v1 import (
     routes_health,
     routes_intent,
     routes_proposals,
+    routes_rutinas,
     routes_smith,
     routes_tareas,
     routes_voice,
@@ -33,6 +34,7 @@ api_router.include_router(routes_google.router)
 api_router.include_router(routes_health.router)
 api_router.include_router(routes_intent.router)
 api_router.include_router(routes_proposals.router)
+api_router.include_router(routes_rutinas.router)
 api_router.include_router(routes_smith.router)
 api_router.include_router(routes_tareas.router)
 api_router.include_router(routes_voice.router)

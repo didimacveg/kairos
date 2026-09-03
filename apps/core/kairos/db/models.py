@@ -323,3 +323,26 @@ class Task(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), index=True
     )
+
+
+class Routine(Base):
+    """Una secuencia de acciones con nombre, aprendida de lo que ya se hizo.
+
+    No graba la pantalla ni el raton: guarda QUE capacidades ejecuto KAIROS,
+    que es lo que de verdad se quiere repetir.
+    """
+
+    __tablename__ = "routines"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    owner_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(String(80), index=True)
+    steps: Mapped[str] = mapped_column(Text)
+    step_count: Mapped[int] = mapped_column(Integer, default=0)
+    run_count: Mapped[int] = mapped_column(Integer, default=0)
+    last_run_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
