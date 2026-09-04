@@ -346,3 +346,27 @@ class Routine(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+
+
+class Instinct(Base):
+    """Un patron observado, con su confianza.
+
+    La confianza importa mas que el patron: uno visto dos veces es una
+    coincidencia; visto quince, una costumbre.
+    """
+
+    __tablename__ = "instincts"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    owner_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    key: Mapped[str] = mapped_column(String(160), index=True)
+    kind: Mapped[str] = mapped_column(String(24), default="momento")
+    statement: Mapped[str] = mapped_column(Text)
+    confidence: Mapped[float] = mapped_column(default=0.0)
+    occurrences: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )

@@ -12,6 +12,7 @@ from kairos.agents.reasoning.providers.base import LLMProvider
 from kairos.agents.reasoning.providers.failover import FailoverProvider
 from kairos.agents.reasoning.providers.ollama import OllamaProvider
 from kairos.agents.registry import AgentRegistry
+from kairos.agents.instintos.agent import InstintosAgent
 from kairos.agents.rutinas.agent import RutinasAgent
 from kairos.agents.smith.agent import SmithAgent
 from kairos.agents.tareas.agent import TareasAgent
@@ -84,6 +85,7 @@ def build_core() -> KairosCore:
     registry.register(CuriosidadAgent(provider=provider, registry=registry))
     registry.register(TareasAgent(provider=provider, registry=registry))
     registry.register(RutinasAgent(registry=registry))
+    registry.register(InstintosAgent())
     registry.register(ConscienciaAgent(provider=provider, registry=registry))
     registry.register(BriefingAgent(provider=provider, registry=registry))
     if settings.search_enabled:

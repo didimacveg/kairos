@@ -334,6 +334,25 @@ class ConscienciaAgent(Agent):
         except (KeyError, ImportError):
             pass
 
+        # Lo que KAIROS ha aprendido observando. Le permite razonar sobre
+        # costumbres, no solo sobre hechos sueltos.
+        try:
+            from kairos.db.models import Instinct
+
+            instintos = (
+                await db.execute(
+                    select(Instinct)
+                    .where(Instinct.owner_id == owner_id, Instinct.confidence >= 0.6)
+                    .order_by(Instinct.confidence.desc())
+                    .limit(8)
+                )
+            ).scalars().all()
+            if instintos:
+                bloques.append("LO QUE HAS OBSERVADO DE EL:\n" + "\n".join(
+                    f"- {i.statement} (confianza {i.confidence:.0%})" for i in instintos))
+        except Exception:  # noqa: BLE001
+            pass
+
         return "\n\n".join(bloques)
 
     @staticmethod
