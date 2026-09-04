@@ -6,7 +6,7 @@ A local-first personal AI assistant. Runs on my own machine, controls my
 desktop, remembers what matters, and decides on its own when something is
 worth telling me.
 
-Seventeen agents · 300+ tests · 76 documented build phases.
+Seventeen agents · 300+ tests · 76+ documented build phases.
 
 > **Note on how this was built.** I designed the architecture and made every
 > technical decision; I used Claude as a pair programmer for implementation.
