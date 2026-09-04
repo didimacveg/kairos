@@ -28,3 +28,6 @@ models/
 node_modules/
 out/
 voices/
+
+videos/
+*.mp4

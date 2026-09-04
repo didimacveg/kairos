@@ -157,6 +157,8 @@ services:
     ports:
       - "127.0.0.1:8000:8000"
     volumes:
+      # Grabaciones a analizar. Solo lectura: KAIROS no corta.
+      - ${KAIROS_VIDEO_DIR:-./videos}:/mnt/video:ro
       - ./apps/core:/app:ro
       # El repositorio en SOLO LECTURA: Smith lee su propio codigo
       # para proponerse cambios, pero no puede escribir en el.

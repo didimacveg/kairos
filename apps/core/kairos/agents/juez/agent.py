@@ -52,8 +52,8 @@ nota alta debe costar.
 CRITERIOS, de 0 a 10:
 
 **correccion** — ¿hay algo falso, inventado o que no se sostiene? Un dato
-concreto sin respaldo es un fallo grave. Si dice honestamente que no sabe
-algo, eso es un 10, no un 5.
+concreto sin respaldo es un fallo grave. Si dice honestamente que
+no sabe algo, eso es un 10, no un 5.
 
 **utilidad** — ¿responde a lo que se pregunta? Contestar algo cercano pero
 distinto es un fallo. Dar tres opciones cuando se pedia una recomendacion,
