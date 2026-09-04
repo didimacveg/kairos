@@ -370,3 +370,24 @@ class Instinct(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+
+
+class Evaluation(Base):
+    """Una medicion de la calidad de las respuestas de KAIROS.
+
+    Lo util es la SERIE, no la nota: un 7 aislado no dice nada; un 7 despues
+    de tres semanas de 8 dice que algo se rompio.
+    """
+
+    __tablename__ = "evaluations"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    owner_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    sample_size: Mapped[int] = mapped_column(Integer, default=0)
+    score_overall: Mapped[float] = mapped_column(default=0.0)
+    scores: Mapped[str] = mapped_column(Text, default="")
+    weakest: Mapped[str] = mapped_column(String(32), default="")
+    note: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
