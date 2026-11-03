@@ -3,6 +3,9 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
+import pytest
+
+import kairos.agents.consciencia.agent as consciencia_mod
 from kairos.agents.consciencia.agent import (
     CLASE_DESDE,
     CLASE_HASTA,
@@ -24,6 +27,25 @@ def _agente() -> ConscienciaAgent:
     return ConscienciaAgent(provider=None, registry=RegistroFalso())
 
 
+class _SabadoAMediodia(datetime):
+    """Reloj fijo fuera de clase y de horas de silencio.
+
+    Sin esto, los tests del tope dependian de la hora a la que se lanzaban:
+    entre semana de 8 a 15 `_momento_adecuado` corta antes por "esta en
+    clase" y nunca llega a comprobar el tope.
+    """
+
+    @classmethod
+    def now(cls, tz=None):  # type: ignore[no-untyped-def,override]
+        fijo = datetime(2026, 11, 7, 12, 0, tzinfo=timezone.utc)  # sabado
+        return fijo.astimezone(tz) if tz is not None else fijo.replace(tzinfo=None)
+
+
+@pytest.fixture
+def reloj_fijo(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(consciencia_mod, "datetime", _SabadoAMediodia)
+
+
 def test_no_interrumpe_en_horario_de_clase() -> None:
     """Instituto de manana: interrumpir en clase es ruido, no proactividad."""
     assert CLASE_DESDE < CLASE_HASTA
@@ -38,20 +60,19 @@ def test_hay_tope_diario() -> None:
     assert 1 <= MAX_AL_DIA <= 6
 
 
-def test_al_llegar_al_tope_se_calla() -> None:
+def test_al_llegar_al_tope_se_calla(reloj_fijo: None) -> None:
     a = _agente()
-    a._contador = [datetime.now(timezone.utc) for _ in range(MAX_AL_DIA)]
+    a._contador = [_SabadoAMediodia.now(timezone.utc) for _ in range(MAX_AL_DIA)]
     puede, motivo = a._momento_adecuado()
     assert puede is False
     assert "comentado" in motivo
 
 
-def test_lo_de_ayer_no_cuenta_para_el_tope() -> None:
+def test_lo_de_ayer_no_cuenta_para_el_tope(reloj_fijo: None) -> None:
     a = _agente()
-    a._contador = [datetime.now(timezone.utc) - timedelta(hours=30) for _ in range(MAX_AL_DIA)]
-    # Puede fallar por horario, pero no por el tope.
-    _, motivo = a._momento_adecuado()
-    assert "comentado" not in motivo
+    a._contador = [_SabadoAMediodia.now(timezone.utc) - timedelta(hours=30) for _ in range(MAX_AL_DIA)]
+    puede, motivo = a._momento_adecuado()
+    assert puede is True, motivo
 
 
 def test_el_prompt_prohibe_comentar_lo_de_hoy() -> None:
