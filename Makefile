@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 COMPOSE := docker compose
 
-.PHONY: explicar test-arranque curar help init up down logs models migrate user test lint fmt reset estado test-integracion test-todo
+.PHONY: bench bench-live explicar test-arranque curar help init up down logs models migrate user test lint fmt reset estado test-integracion test-todo
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -59,6 +59,13 @@ lint: ## Linter + tipos
 
 fmt: ## Formatea
 	$(COMPOSE) exec core ruff format kairos tests
+
+bench: ## Benchmarks offline del nucleo (sin modelos ni red)
+	$(COMPOSE) exec core python /repo/benchmarks/run.py offline
+
+bench-live: ## Latencia real de chat y voz contra la pila en marcha
+	$(COMPOSE) exec -e KAIROS_BENCH_USER -e KAIROS_BENCH_PASSWORD core \
+		python /repo/benchmarks/run.py live --url http://127.0.0.1:8000
 
 reset: ## DESTRUCTIVO: borra volumenes y datos
 	$(COMPOSE) down -v
