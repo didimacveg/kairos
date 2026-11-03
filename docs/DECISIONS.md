@@ -1,8 +1,9 @@
 # Why KAIROS is built this way
 
 A guide to the reasoning behind the architecture, for anyone reading the code
-for the first time. The full record is in [`adr/`](adr/) — 71 documents, one
-per decision.
+for the first time. The full record is in [`adr/`](adr/) — 77 documents, one
+per decision. Module-by-module detail is in
+[`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 ---
 
@@ -18,8 +19,8 @@ which is O(n) per query and degrades the moment memory becomes useful.
 
 ## Why agents instead of one large prompt
 
-Seventeen agents, each owning a bounded context and exposing named
-capabilities. A single prompt handling voice, memory, desktop control and
+Twenty-one agents (sixteen always on, five opt-in), each owning a bounded
+context and exposing named capabilities. A single prompt handling voice, memory, desktop control and
 web search would need every instruction in every call — expensive, and the
 model applies rules worse as the prompt grows.
 

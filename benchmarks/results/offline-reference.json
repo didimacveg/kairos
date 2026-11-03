@@ -1,0 +1,101 @@
+{
+  "suite": "offline",
+  "environment": {
+    "date": "2026-11-03T13:50:24+00:00",
+    "commit": "10013015c1",
+    "python": "3.13.18",
+    "platform": "Linux-6.18.44-fc-v230-x86_64-with-glibc2.39",
+    "machine": "x86_64",
+    "cpu_count": 4,
+    "seed": 20261103
+  },
+  "results": [
+    {
+      "name": "intent_routing_per_message",
+      "unit": "µs",
+      "samples": 500,
+      "median": 26.99108854139117,
+      "p95": 30.12102083310708,
+      "mean": 27.364817770830996,
+      "minimum": 26.03544791668355,
+      "notes": {
+        "messages": 96,
+        "classifier_gate_pass_rate": "71%"
+      }
+    },
+    {
+      "name": "prompt_assembly",
+      "unit": "µs",
+      "samples": 500,
+      "median": 22.54599999673701,
+      "p95": 46.07900001474263,
+      "mean": 25.071011998306858,
+      "minimum": 21.877999984099006,
+      "notes": {
+        "turns": 12,
+        "prompt_chars": 8399
+      }
+    },
+    {
+      "name": "document_chunking_20k_words",
+      "unit": "ms",
+      "samples": 50,
+      "median": 0.3384455000059461,
+      "p95": 0.41355399997655695,
+      "mean": 0.3537993800046024,
+      "minimum": 0.3307040000208872,
+      "notes": {
+        "chunks": 185,
+        "words": 20000
+      }
+    },
+    {
+      "name": "patch_generation_900_lines",
+      "unit": "ms",
+      "samples": 50,
+      "median": 1.365896000010025,
+      "p95": 1.522393000016109,
+      "mean": 1.3984150000055706,
+      "minimum": 1.3279560000114543,
+      "notes": {
+        "diff_lines": 159,
+        "edits": 20
+      }
+    },
+    {
+      "name": "stream_overhead_per_token",
+      "unit": "µs",
+      "samples": 100,
+      "median": 2.4319050001508913,
+      "p95": 2.657919999933256,
+      "mean": 2.435654700011014,
+      "minimum": 2.2259099998223064,
+      "notes": {
+        "tokens": 200,
+        "includes": "prompt assembly amortised"
+      }
+    },
+    {
+      "name": "ttft_local_direct",
+      "unit": "µs",
+      "samples": 500,
+      "median": 3.5079999918252724,
+      "p95": 5.052999995314167,
+      "mean": 4.070991999128637,
+      "minimum": 3.139000000373926,
+      "notes": {}
+    },
+    {
+      "name": "ttft_cloud_down_failover_to_local",
+      "unit": "µs",
+      "samples": 500,
+      "median": 7.080499983658228,
+      "p95": 11.913000037111487,
+      "mean": 16.021760001194707,
+      "minimum": 6.660999986252136,
+      "notes": {
+        "note": "cost of the failover path itself, excluding network timeout"
+      }
+    }
+  ]
+}
