@@ -71,6 +71,9 @@ class KairosCore:
         message: str,
         conversation_id: uuid.UUID | None,
         attachments: list[uuid.UUID] | None = None,
+        # Mismo parametro que en chat_stream. Faltaba aqui y `hablado` era un
+        # nombre sin definir: POST /chat respondia 500 con NameError.
+        hablado: bool = False,
     ) -> ChatResult:
         correlation_id = uuid.uuid4()
         trace: list[TraceEvent] = []

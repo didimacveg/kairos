@@ -192,3 +192,28 @@ def test_la_configuracion_se_carga_sin_variables() -> None:
     s = get_settings()
     assert s.timezone
     assert s.postgres_host
+
+
+# --- Nombres sin definir ----------------------------------------------------
+
+def test_no_hay_nombres_sin_definir() -> None:
+    """Un nombre sin definir compila y solo revienta al ejecutar esa linea.
+
+    `KairosCore.chat` usaba `hablado` sin recibirlo como parametro: el modulo
+    se importaba, build_core() funcionaba y POST /chat devolvia 500 con
+    NameError. Ningun test de los de arriba lo pilla, porque ninguno ejecuta
+    esa rama. Ruff (F821) lo ve sin ejecutar nada.
+    """
+    import shutil
+    import subprocess
+
+    ruff = shutil.which("ruff")
+    if ruff is None:
+        pytest.skip("ruff no esta instalado (dependencia dev)")
+    raiz = pathlib.Path(__file__).resolve().parent.parent
+    salida = subprocess.run(
+        [ruff, "check", "--select", "F821", "--no-cache", "--output-format", "concise",
+         str(raiz / "kairos")],
+        capture_output=True, text=True, check=False,
+    )
+    assert salida.returncode == 0, salida.stdout
